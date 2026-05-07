@@ -14,6 +14,7 @@ import { createProfilesRouter } from './modules/profiles/profiles.routes.js';
 import { createReferencesRouter } from './modules/references/references.routes.js';
 import { createResumesRouter } from './modules/resumes/resumes.routes.js';
 import { createReviewsRouter } from './modules/reviews/reviews.routes.js';
+import { createMaterialsRouter, createToolsRouter } from './modules/trade/trade.routes.js';
 import { createUploadsRouter } from './modules/uploads/uploads.routes.js';
 import { createUsersRouter } from './modules/users/users.routes.js';
 import { createVacanciesRouter } from './modules/vacancies/vacancies.routes.js';
@@ -26,6 +27,8 @@ const API_MODULES = [
   'vacancies',
   'resumes',
   'equipment',
+  'materials',
+  'tools',
   'moderation',
   'favorites',
   'reviews',
@@ -59,6 +62,8 @@ export function createApiRouter(container: ApiContainer): Router {
   v1Router.use('/vacancies', createVacanciesRouter(container));
   v1Router.use('/resumes', createResumesRouter(container));
   v1Router.use('/equipment', createEquipmentRouter(container));
+  v1Router.use('/materials', createMaterialsRouter(container));
+  v1Router.use('/tools', createToolsRouter(container));
   v1Router.use('/moderation', createModerationRouter(container));
   v1Router.use('/favorites', createFavoritesRouter(container));
   v1Router.use('/reviews', createReviewsRouter(container));

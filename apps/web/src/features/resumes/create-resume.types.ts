@@ -8,6 +8,7 @@ export const createResumePayloadSchema = z.object({
   profession: z.string().trim().min(2, 'Укажите профессию').max(180),
   description: z.string().trim().min(20, 'Добавьте описание от 20 символов').max(4000),
   experienceText: z.string().trim().min(2, 'Опишите опыт').max(1200),
+  expectedSalary: z.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   categoryText: z.string().trim().max(120).optional(),

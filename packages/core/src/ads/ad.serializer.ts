@@ -27,6 +27,7 @@ export function serializeAdCard(ad: PublicAdRecord): PublicAdCardDto {
     id: ad.id,
     type,
     title: ad.title,
+    description: ad.description,
     subtitle: getSubtitle(ad),
     coverPhoto: serializePhoto(ad.photos[0]),
     shortSalary: getShortSalary(ad),
@@ -102,21 +103,35 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
     };
   }
 
+  if (type === 'equipment') {
+    return {
+      ...base,
+      type: 'equipment',
+      equipment: {
+        name: ad.title,
+        category: getCategory(ad),
+        condition: serializeNullableEnum(ad.equipmentDetails?.condition),
+        brand: ad.equipmentDetails?.brand ?? null,
+        model: ad.equipmentDetails?.model ?? null,
+        productionYear: ad.equipmentDetails?.productionYear ?? null,
+        rentalPrice: ad.equipmentDetails?.rentalPrice?.toString() ?? null,
+        salePrice: ad.equipmentDetails?.salePrice?.toString() ?? null,
+        depositAmount: ad.equipmentDetails?.depositAmount?.toString() ?? null,
+        currency: ad.equipmentDetails?.currency ?? ad.currency,
+        availability: ad.equipmentDetails?.availability ?? null
+      }
+    };
+  }
+
   return {
     ...base,
-    type: 'equipment',
-    equipment: {
+    type,
+    product: {
       name: ad.title,
       category: getCategory(ad),
-      condition: serializeNullableEnum(ad.equipmentDetails?.condition),
-      brand: ad.equipmentDetails?.brand ?? null,
-      model: ad.equipmentDetails?.model ?? null,
-      productionYear: ad.equipmentDetails?.productionYear ?? null,
-      rentalPrice: ad.equipmentDetails?.rentalPrice?.toString() ?? null,
-      salePrice: ad.equipmentDetails?.salePrice?.toString() ?? null,
-      depositAmount: ad.equipmentDetails?.depositAmount?.toString() ?? null,
-      currency: ad.equipmentDetails?.currency ?? ad.currency,
-      availability: ad.equipmentDetails?.availability ?? null
+      price: ad.priceAmount?.toString() ?? null,
+      currency: ad.currency,
+      address: getAddress(ad)
     }
   };
 }
@@ -128,6 +143,11 @@ function serializeBaseDetail(ad: PublicAdRecord): PublicAdBaseDetailDto {
     description: ad.description,
     photos: ad.photos.map(serializePhoto).filter((photo): photo is PublicAdPhotoDto => Boolean(photo)),
     contacts: ad.contacts.map(serializeContact),
+    owner: {
+      id: ad.owner.id,
+      displayName: ad.owner.displayName,
+      maxUsername: ad.owner.maxUsername
+    },
     updatedAt: ad.updatedAt.toISOString()
   };
 }
@@ -172,6 +192,10 @@ function getSubtitle(ad: PublicAdRecord): string | null {
 
   if (equipmentName) {
     return equipmentName;
+  }
+
+  if (ad.type === 'MATERIAL' || ad.type === 'TOOL') {
+    return getCategory(ad);
   }
 
   return ad.owner.displayName ?? ([ad.owner.firstName, ad.owner.lastName].filter(Boolean).join(' ') || null);
@@ -306,8 +330,16 @@ function getCardChips(ad: PublicAdRecord): PublicAdChipDto[] {
   if (ad.equipmentDetails?.condition) {
     chips.push({
       key: 'condition',
-      label: 'Condition',
+      label: 'Состояние',
       value: serializeNullableEnum(ad.equipmentDetails.condition) ?? ad.equipmentDetails.condition
+    });
+  }
+
+  if ((ad.type === 'MATERIAL' || ad.type === 'TOOL') && ad.priceAmount) {
+    chips.push({
+      key: 'price',
+      label: 'Цена',
+      value: `${ad.priceAmount.toString()} ${ad.currency}`
     });
   }
 

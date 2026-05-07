@@ -229,7 +229,7 @@ export function CreateVacancyPage() {
       <AppPage>
         <EmptyState
           title="Вакансия отправлена"
-          description="Мы проверим объявление и подготовим его к публикации. Статус появится в разделе «Мои объявления»."
+          description="Мы проверим объявление и подготовим его к публикации. Его можно найти в разделе «Мои объявления»."
           action={
             <div className="grid w-full gap-2">
               <Link
@@ -416,7 +416,7 @@ export function CreateVacancyPage() {
           />
         </FormSection>
 
-        <FormSection title="Оплата">
+        <FormSection title="Зарплата">
           <Input
             label="Короткий текст по оплате"
             placeholder="от 160 000 ₽, выплаты два раза в месяц"

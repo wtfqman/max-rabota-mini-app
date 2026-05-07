@@ -155,6 +155,8 @@ export class AdService {
               create: {
                 desiredPosition: dto.resume.desiredPosition,
                 experienceYears: dto.resume.experienceYears,
+                expectedSalary: dto.resume.expectedSalary,
+                salaryCurrency: dto.resume.salaryCurrency ?? 'RUB',
                 skillsJson: JSON.stringify(dto.resume.skills ?? [])
               }
             }
@@ -177,6 +179,14 @@ export class AdService {
 
     if (type === 'resume') {
       return AdType.RESUME;
+    }
+
+    if (type === 'material') {
+      return AdType.MATERIAL;
+    }
+
+    if (type === 'tool') {
+      return AdType.TOOL;
     }
 
     return AdType.EQUIPMENT;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Heart, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Heart, Phone, RefreshCw, Star } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
@@ -9,7 +9,8 @@ import { EmptyState } from '../shared/ui/EmptyState.js';
 import { LoadingState } from '../shared/ui/LoadingState.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { StatChip } from '../shared/ui/StatChip.js';
-import type { PublicAdDetail } from '../features/ads/ad.types.js';
+import type { PublicAdContact } from '../features/vacancies/vacancy.types.js';
+import type { PublicAdDetail, ReviewItem } from '../features/ads/ad.types.js';
 
 export function AdDetailsPage() {
   const { adId } = useParams();
@@ -17,6 +18,7 @@ export function AdDetailsPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -38,6 +40,23 @@ export function AdDetailsPage() {
         }
         setAd(response.data);
         setStatus('ready');
+
+        if (response.data.type === 'resume') {
+          void apiClient
+            .listUserReviews(response.data.owner.id)
+            .then((reviewsResponse) => {
+              if (active) {
+                setReviews(reviewsResponse.data);
+              }
+            })
+            .catch(() => {
+              if (active) {
+                setReviews([]);
+              }
+            });
+        } else {
+          setReviews([]);
+        }
       })
       .catch((requestError: unknown) => {
         if (!active) {
@@ -102,7 +121,7 @@ export function AdDetailsPage() {
 
   return (
     <AppPage>
-      <Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
+      <Link to={getBackUrl(ad.type)} className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
         <ArrowLeft size={17} />
         Назад
       </Link>
@@ -134,8 +153,35 @@ export function AdDetailsPage() {
       </section>
 
       {ad.description ? (
-        <SectionCard title="Описание">
+        <SectionCard title={ad.type === 'resume' ? 'О себе' : 'Описание'}>
           <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{ad.description}</p>
+        </SectionCard>
+      ) : null}
+
+      {ad.type === 'resume' ? <ResumeReviews reviews={reviews} /> : null}
+
+      {ad.type === 'equipment' ? (
+        <SectionCard title="Детали техники">
+          <DetailGrid
+            items={[
+              ['Категория', ad.equipment.category],
+              ['Марка', ad.equipment.brand],
+              ['Модель', ad.equipment.model],
+              ['Год', ad.equipment.productionYear ? String(ad.equipment.productionYear) : null]
+            ]}
+          />
+        </SectionCard>
+      ) : null}
+
+      {ad.type === 'material' || ad.type === 'tool' ? (
+        <SectionCard title="Детали объявления">
+          <DetailGrid
+            items={[
+              ['Категория', ad.product.category],
+              ['Цена', ad.product.price ? `${ad.product.price} ${ad.product.currency}` : null],
+              ['Адрес', ad.product.address]
+            ]}
+          />
         </SectionCard>
       ) : null}
 
@@ -143,10 +189,17 @@ export function AdDetailsPage() {
         {ad.contacts.length ? (
           <div className="grid gap-2">
             {ad.contacts.map((contact) => (
-              <div key={contact.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
-                <p className="text-sm font-semibold text-text-primary">{contact.label ?? contact.type}</p>
-                <p className="text-sm text-text-secondary">{contact.value}</p>
-              </div>
+              <a
+                key={contact.id}
+                href={getContactHref(contact)}
+                className="flex items-center gap-3 rounded-panel border border-white/8 bg-surface-900/92 p-3 transition hover:border-accent-green/35 active:scale-[0.985]"
+              >
+                <Phone size={18} className="shrink-0 text-accent-green" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary">{contact.label ?? contact.type}</p>
+                  <p className="truncate text-sm text-text-secondary">{contact.value}</p>
+                </div>
+              </a>
             ))}
           </div>
         ) : (
@@ -163,8 +216,102 @@ function typeLabel(type: string): string {
   }
 
   if (type === 'equipment') {
-    return 'Техника';
+    return 'Строительная техника';
+  }
+
+  if (type === 'material') {
+    return 'Строительные материалы';
+  }
+
+  if (type === 'tool') {
+    return 'Инструменты';
   }
 
   return 'Вакансия';
+}
+
+function getBackUrl(type: string): string {
+  if (type === 'resume') {
+    return '/resumes';
+  }
+
+  if (type === 'equipment') {
+    return '/equipment';
+  }
+
+  if (type === 'material') {
+    return '/materials';
+  }
+
+  if (type === 'tool') {
+    return '/tools';
+  }
+
+  return '/vacancies';
+}
+
+function getContactHref(contact: PublicAdContact): string {
+  if (contact.type === 'phone') {
+    return `tel:${contact.value.replace(/[^\d+]/g, '')}`;
+  }
+
+  if (contact.type === 'email') {
+    return `mailto:${contact.value}`;
+  }
+
+  if (contact.type === 'website') {
+    return contact.value.startsWith('http') ? contact.value : `https://${contact.value}`;
+  }
+
+  return '#';
+}
+
+function DetailGrid({ items }: { items: Array<[string, string | null]> }) {
+  const visible = items.filter((item): item is [string, string] => Boolean(item[1]));
+
+  if (!visible.length) {
+    return <p className="text-sm text-text-secondary">Подробности указаны в описании.</p>;
+  }
+
+  return (
+    <div className="grid gap-2">
+      {visible.map(([label, value]) => (
+        <div key={label} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
+          <p className="text-xs font-semibold uppercase text-text-muted">{label}</p>
+          <p className="mt-1 text-sm font-bold text-text-primary">{value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResumeReviews({ reviews }: { reviews: ReviewItem[] }) {
+  const average = reviews.length
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+    : null;
+
+  return (
+    <SectionCard title="Отзывы" description="Небольшой сигнал доверия без лишней перегрузки.">
+      <div className="grid gap-3">
+        <div className="flex flex-wrap gap-2">
+          <StatChip
+            label={average ? `${average.toFixed(1)} из 5` : 'Отзывов пока нет'}
+            tone="green"
+            icon={<Star size={15} />}
+          />
+          {reviews.length ? <StatChip label={`${reviews.length} отзывов`} /> : null}
+        </div>
+        {reviews.slice(0, 2).map((review) => (
+          <div key={review.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
+            <div className="mb-1 flex items-center gap-1 text-accent-green">
+              {Array.from({ length: review.rating }).map((_, index) => (
+                <Star key={index} size={14} className="fill-accent-green" />
+              ))}
+            </div>
+            {review.text ? <p className="text-sm leading-6 text-text-secondary">{review.text}</p> : null}
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  );
 }

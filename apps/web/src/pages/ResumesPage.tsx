@@ -204,6 +204,7 @@ export function ResumesPage() {
               location={ad.locationShort}
               price={ad.shortSalary ?? undefined}
               category={ad.category}
+              description={ad.description}
               chips={ad.chips.map((chip) => ({ key: chip.key, value: chip.value }))}
               isFavorite={favoriteIds.has(ad.id)}
               onFavoriteClick={() => toggleFavorite(ad.id)}

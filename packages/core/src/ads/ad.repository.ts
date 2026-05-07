@@ -524,6 +524,14 @@ export class AdRepository {
       return AdType.EQUIPMENT;
     }
 
+    if (type === 'material') {
+      return AdType.MATERIAL;
+    }
+
+    if (type === 'tool') {
+      return AdType.TOOL;
+    }
+
     return undefined;
   }
 

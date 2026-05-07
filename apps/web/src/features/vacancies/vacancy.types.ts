@@ -23,8 +23,9 @@ export interface PublicAdChip {
 
 export interface PublicAdCard {
   id: string;
-  type: 'vacancy' | 'resume' | 'equipment';
+  type: 'vacancy' | 'resume' | 'equipment' | 'material' | 'tool';
   title: string;
+  description: string | null;
   subtitle: string | null;
   coverPhoto: PublicAdPhoto | null;
   shortSalary: string | null;
@@ -71,6 +72,11 @@ export interface PublicVacancyDetail extends PublicAdCard {
   description: string | null;
   photos: PublicAdPhoto[];
   contacts: PublicAdContact[];
+  owner: {
+    id: string;
+    displayName: string | null;
+    maxUsername: string | null;
+  };
   updatedAt: string;
   vacancy: {
     companyName: string | null;

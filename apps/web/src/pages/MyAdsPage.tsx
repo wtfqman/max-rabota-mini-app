@@ -16,7 +16,9 @@ const typeTabs: Array<{ value: PublicAdType | ''; label: string }> = [
   { value: '', label: 'Все' },
   { value: 'vacancy', label: 'Вакансии' },
   { value: 'resume', label: 'Резюме' },
-  { value: 'equipment', label: 'Техника' }
+  { value: 'equipment', label: 'Техника' },
+  { value: 'material', label: 'Материалы' },
+  { value: 'tool', label: 'Инструменты' }
 ];
 
 const statusTabs: Array<{ value: PublicAdStatus | ''; label: string }> = [
@@ -126,7 +128,7 @@ export function MyAdsPage() {
       {status === 'ready' && ads.length === 0 ? (
         <EmptyState
           title="Объявлений пока нет"
-          description="Когда вы создадите вакансию, резюме или объявление о технике, они появятся здесь."
+          description="Когда вы создадите вакансию, резюме, материал или инструмент, они появятся здесь."
           action={
             <ActionButton variant="secondary" icon={<SearchX size={18} />}>
               Пусто
@@ -141,7 +143,7 @@ export function MyAdsPage() {
             <div key={ad.id} className="space-y-2">
               <AdCard
                 to={getAdUrl(ad)}
-                typeLabel={statusLabel(ad.status)}
+                typeLabel={typeLabel(ad.type)}
                 title={ad.title}
                 subtitle={ad.subtitle}
                 coverImageUrl={ad.coverPhoto?.previewUrl ?? ad.coverPhoto?.url}
@@ -150,6 +152,9 @@ export function MyAdsPage() {
                 category={ad.category}
                 description={ad.description}
               />
+              <div className="flex flex-wrap gap-2">
+                <StatChip label={statusLabel(ad.status)} tone={ad.status === 'published' || ad.status === 'approved' ? 'green' : 'amber'} />
+              </div>
               {ad.moderationReason ? (
                 <p className="rounded-panel border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                   Что стоит поправить: {ad.moderationReason}
@@ -275,7 +280,39 @@ function EditSheet({
 }
 
 function getAdUrl(ad: OwnedAdCard): string {
-  return ad.type === 'vacancy' ? `/vacancies/${ad.id}` : `/ads/${ad.id}`;
+  if (ad.type === 'vacancy') {
+    return `/vacancies/${ad.id}`;
+  }
+
+  if (ad.type === 'resume') {
+    return `/resumes/${ad.id}`;
+  }
+
+  if (ad.type === 'equipment') {
+    return `/equipment/${ad.id}`;
+  }
+
+  if (ad.type === 'material') {
+    return `/materials/${ad.id}`;
+  }
+
+  if (ad.type === 'tool') {
+    return `/tools/${ad.id}`;
+  }
+
+  return `/ads/${ad.id}`;
+}
+
+function typeLabel(type: PublicAdType): string {
+  const labels: Record<PublicAdType, string> = {
+    vacancy: 'Вакансия',
+    resume: 'Резюме',
+    equipment: 'Техника',
+    material: 'Материалы',
+    tool: 'Инструменты'
+  };
+
+  return labels[type];
 }
 
 function statusLabel(status: PublicAdStatus): string {

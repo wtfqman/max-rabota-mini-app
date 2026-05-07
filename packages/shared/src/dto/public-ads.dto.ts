@@ -36,6 +36,7 @@ export interface PublicAdCardDto {
   id: string;
   type: AdTypeCode;
   title: string;
+  description: string | null;
   subtitle: string | null;
   coverPhoto: PublicAdPhotoDto | null;
   shortSalary: string | null;
@@ -54,6 +55,11 @@ export interface PublicAdBaseDetailDto extends PublicAdCardDto {
   description: string | null;
   photos: PublicAdPhotoDto[];
   contacts: PublicAdContactDto[];
+  owner: {
+    id: string;
+    displayName: string | null;
+    maxUsername: string | null;
+  };
   updatedAt: string;
 }
 
@@ -115,10 +121,22 @@ export interface PublicEquipmentDetailDto extends PublicAdBaseDetailDto {
   };
 }
 
+export interface PublicProductDetailDto extends PublicAdBaseDetailDto {
+  type: 'material' | 'tool';
+  product: {
+    name: string;
+    category: string | null;
+    price: string | null;
+    currency: string;
+    address: string | null;
+  };
+}
+
 export type PublicAdDetailDto =
   | PublicVacancyDetailDto
   | PublicResumeDetailDto
-  | PublicEquipmentDetailDto;
+  | PublicEquipmentDetailDto
+  | PublicProductDetailDto;
 
 export interface PublicAdListMetaDto extends Record<string, unknown> {
   page: number;

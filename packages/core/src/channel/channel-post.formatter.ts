@@ -6,7 +6,7 @@ export class ChannelPostFormatter {
 
   formatAd(ad: AdWithDetailsRecord): string {
     const type = ad.type.toLowerCase() as keyof typeof AD_TYPE_LABELS;
-    const detailsUrl = `${this.miniAppUrl.replace(/\/+$/, '')}/${type === 'vacancy' ? 'vacancies' : 'ads'}/${ad.id}`;
+    const detailsUrl = `${this.miniAppUrl.replace(/\/+$/, '')}/${this.getDetailsPath(type, ad.id)}`;
     const contacts = ad.contacts.map((contact) => {
       const label = contact.label ?? contact.type.toLowerCase();
       return `${label}: ${contact.value}`;
@@ -72,7 +72,18 @@ export class ChannelPostFormatter {
 
     if (type === 'resume') {
       const experience = this.getMetadataString(ad, ['experienceText', 'experience']);
-      return [experience ? `Опыт: ${experience}` : null];
+      return [
+        experience ? `Опыт: ${experience}` : null,
+        ad.resumeDetails?.expectedSalary
+          ? `Желаемая зарплата: ${ad.resumeDetails.expectedSalary.toString()} ${ad.resumeDetails.salaryCurrency}`
+          : null
+      ];
+    }
+
+    if (type === 'material' || type === 'tool') {
+      return [
+        ad.priceAmount ? `Цена: ${ad.priceAmount.toString()} ${ad.currency}` : null
+      ];
     }
 
     return [
@@ -173,5 +184,17 @@ export class ChannelPostFormatter {
     } catch {
       return null;
     }
+  }
+
+  private getDetailsPath(type: keyof typeof AD_TYPE_LABELS, id: string): string {
+    const routes: Record<keyof typeof AD_TYPE_LABELS, string> = {
+      vacancy: 'vacancies',
+      resume: 'resumes',
+      equipment: 'equipment',
+      material: 'materials',
+      tool: 'tools'
+    };
+
+    return `${routes[type]}/${id}`;
   }
 }

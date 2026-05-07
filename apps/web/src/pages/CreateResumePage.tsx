@@ -31,6 +31,7 @@ interface ResumeFormState {
   profession: string;
   description: string;
   experienceText: string;
+  expectedSalary: string;
   districtText: string;
   address: string;
   categoryText: string;
@@ -49,6 +50,7 @@ const initialForm: ResumeFormState = {
   profession: '',
   description: '',
   experienceText: '',
+  expectedSalary: '',
   districtText: '',
   address: '',
   categoryText: '',
@@ -70,7 +72,6 @@ export function CreateResumePage() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdAdId, setCreatedAdId] = useState<string | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
@@ -99,6 +100,7 @@ export function CreateResumePage() {
     profession: form.profession.trim(),
     description: form.description.trim(),
     experienceText: form.experienceText.trim(),
+    expectedSalary: toNumber(form.expectedSalary),
     districtText: emptyToUndefined(form.districtText),
     address: emptyToUndefined(form.address),
     categoryText: emptyToUndefined(form.categoryText),
@@ -143,7 +145,7 @@ export function CreateResumePage() {
     }
 
     if (!accessToken) {
-      setSubmitError('Откройте mini app из MAX, чтобы отправить резюме на модерацию.');
+      setSubmitError('Откройте приложение из MAX, чтобы отправить резюме.');
       setMode('form');
       return;
     }
@@ -153,7 +155,7 @@ export function CreateResumePage() {
       setSubmitError(null);
 
       const uploadedPhotos = await uploadAdPhotos(photos, validPayload.name, 1);
-      const response = await apiClient.createResume(buildPayload(uploadedPhotos.map((photo) => ({
+      await apiClient.createResume(buildPayload(uploadedPhotos.map((photo) => ({
         storageKey: photo.storageKey,
         url: photo.url,
         previewUrl: photo.previewUrl ?? undefined,
@@ -163,7 +165,6 @@ export function CreateResumePage() {
       }))));
 
       window.localStorage.removeItem(DRAFT_KEY);
-      setCreatedAdId(response.data.id);
       setMode('success');
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Не удалось отправить резюме');
@@ -177,8 +178,8 @@ export function CreateResumePage() {
     return (
       <AppPage>
         <EmptyState
-          title="Резюме отправлено на модерацию"
-          description="После одобрения оно появится в приложении для работодателей и заказчиков."
+          title="Резюме отправлено"
+          description="Мы проверим его и аккуратно добавим в ленту резюме."
           action={
             <div className="grid w-full gap-2">
               <Link
@@ -187,7 +188,6 @@ export function CreateResumePage() {
               >
                 Мои объявления
               </Link>
-              {createdAdId ? <p className="text-xs text-text-muted">ID объявления: {createdAdId}</p> : null}
             </div>
           }
         />
@@ -204,7 +204,7 @@ export function CreateResumePage() {
           <p className="text-sm font-semibold uppercase text-accent-green">Предпросмотр</p>
           <h1 className="text-3xl font-black text-text-primary">{payload.name}</h1>
           <p className="text-base leading-6 text-text-secondary">
-            Проверьте, как резюме будет выглядеть после модерации.
+            Проверьте, как резюме будет выглядеть в ленте.
           </p>
         </div>
 
@@ -215,6 +215,7 @@ export function CreateResumePage() {
           subtitle={payload.profession}
           coverImageUrl={previewCover}
           location={payload.address ?? payload.districtText}
+          price={payload.expectedSalary ? `${payload.expectedSalary} ₽` : undefined}
           category={payload.categoryText}
           description={payload.description}
           chips={[{ key: 'experience', value: payload.experienceText }]}
@@ -244,7 +245,7 @@ export function CreateResumePage() {
             Править
           </ActionButton>
           <ActionButton type="button" icon={<Send size={18} />} disabled={isSubmitting} onClick={submit}>
-            {isSubmitting ? 'Отправляем...' : 'На модерацию'}
+            {isSubmitting ? 'Отправляем...' : 'Отправить'}
           </ActionButton>
         </div>
       </AppPage>
@@ -257,7 +258,7 @@ export function CreateResumePage() {
         <p className="text-sm font-semibold uppercase text-accent-green">Создание</p>
         <h1 className="text-3xl font-black text-text-primary">Новое резюме</h1>
         <p className="text-base leading-6 text-text-secondary">
-          Расскажите о себе, опыте и способах связи. Резюме станет видимым после модерации.
+          Расскажите о себе, опыте и способах связи. После проверки резюме появится в ленте.
         </p>
       </div>
 
@@ -294,6 +295,14 @@ export function CreateResumePage() {
             onChange={(event) => updateField('experienceText', event.target.value)}
           />
           <FieldError errors={errors.experienceText} />
+          <Input
+            label="Желаемая зарплата"
+            placeholder="Например: 120000"
+            inputMode="numeric"
+            value={form.expectedSalary}
+            onChange={(event) => updateField('expectedSalary', event.target.value)}
+          />
+          <FieldError errors={errors.expectedSalary} />
           <SuggestionInput label="Категория / направление" placeholder="Склад, стройка, логистика" value={form.categoryText} loadSuggestions={loadCategorySuggestions} onChange={(event) => updateField('categoryText', event.target.value)} />
         </FormSection>
 
@@ -319,7 +328,7 @@ export function CreateResumePage() {
             Предпросмотр
           </ActionButton>
           <ActionButton type="button" icon={<Send size={18} />} disabled={isSubmitting} onClick={submit}>
-            {isSubmitting ? 'Отправляем...' : 'На модерацию'}
+            {isSubmitting ? 'Отправляем...' : 'Отправить'}
           </ActionButton>
         </div>
       </form>
@@ -402,6 +411,16 @@ function updateArrayItem<TItem>(
 function emptyToUndefined(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function toNumber(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const number = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function loadDraft(): ResumeFormState {

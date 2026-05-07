@@ -17,6 +17,10 @@ import type {
   CreateEquipmentResponse
 } from '../../features/equipment/create-equipment.types.js';
 import type {
+  CreateProductPayload,
+  CreateProductResponse
+} from '../../features/products/create-product.types.js';
+import type {
   PublicVacancyDetail,
   PublicAdCard,
   VacancyListMeta,
@@ -64,6 +68,18 @@ export const apiClient = {
     apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/resumes${toQueryString(query)}`),
   getResumeDetails: (adId: string) =>
     apiRequest<ApiEnvelope<PublicAdDetail>>(`/resumes/${encodeURIComponent(adId)}`),
+  listEquipment: (query: VacancyListQuery) =>
+    apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/equipment${toQueryString(query)}`),
+  getEquipmentDetails: (adId: string) =>
+    apiRequest<ApiEnvelope<PublicAdDetail>>(`/equipment/${encodeURIComponent(adId)}`),
+  listMaterials: (query: VacancyListQuery) =>
+    apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/materials${toQueryString(query)}`),
+  getMaterialDetails: (adId: string) =>
+    apiRequest<ApiEnvelope<PublicAdDetail>>(`/materials/${encodeURIComponent(adId)}`),
+  listTools: (query: VacancyListQuery) =>
+    apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/tools${toQueryString(query)}`),
+  getToolDetails: (adId: string) =>
+    apiRequest<ApiEnvelope<PublicAdDetail>>(`/tools/${encodeURIComponent(adId)}`),
   getAdDetails: (adId: string) =>
     apiRequest<ApiEnvelope<PublicAdDetail>>(`/ads/${encodeURIComponent(adId)}`),
   listMyAds: (query: MyAdsQuery) =>
@@ -144,6 +160,16 @@ export const apiClient = {
     }),
   createEquipment: (payload: CreateEquipmentPayload) =>
     apiRequest<ApiEnvelope<CreateEquipmentResponse>>('/equipment', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  createMaterial: (payload: CreateProductPayload) =>
+    apiRequest<ApiEnvelope<CreateProductResponse>>('/materials', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  createTool: (payload: CreateProductPayload) =>
+    apiRequest<ApiEnvelope<CreateProductResponse>>('/tools', {
       method: 'POST',
       body: JSON.stringify(payload)
     })

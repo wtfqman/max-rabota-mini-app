@@ -3,52 +3,48 @@ import {
   canonicalizeCategory,
   canonicalizeDistrict,
   type AdListQueryDto,
+  type AdTypeCode,
   type CreateAdDto
 } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
-import type { CreateResumeDto } from './resumes.schemas.js';
-import type { ResumesRepository } from './resumes.repository.js';
+import type { CreateTradeAdDto } from './trade.schemas.js';
+import type { TradeRepository } from './trade.repository.js';
 
-export class ResumesService extends FoundationService {
+export class TradeService extends FoundationService {
   constructor(
-    repository: ResumesRepository,
-    private readonly coreAdService: CoreAdService
+    repository: TradeRepository,
+    private readonly coreAdService: CoreAdService,
+    private readonly adType: Extract<AdTypeCode, 'material' | 'tool'>
   ) {
     super(repository);
   }
 
   async listPublic(query: AdListQueryDto) {
-    return this.coreAdService.listPublicAds(query, 'resume');
+    return this.coreAdService.listPublicAds(query, this.adType);
   }
 
   async getPublicDetails(adId: string) {
-    return this.coreAdService.getPublicAdDetails(adId, 'resume');
+    return this.coreAdService.getPublicAdDetails(adId, this.adType);
   }
 
-  async createForModeration(ownerId: string, dto: CreateResumeDto) {
+  async createForModeration(ownerId: string, dto: CreateTradeAdDto) {
     const categoryText = canonicalizeCategory(dto.categoryText);
     const districtText = canonicalizeDistrict(dto.districtText);
     const createDto: CreateAdDto = {
-      type: 'resume',
-      title: dto.name,
+      type: this.adType,
+      title: dto.title,
       description: dto.description,
       districtText,
       categoryText,
+      priceAmount: dto.priceAmount,
       metadata: {
-        address: dto.address,
-        experienceText: dto.experienceText
+        address: dto.address
       },
       photos: dto.photos,
       contacts: dto.contacts,
       requirements: [],
       responsibilities: [],
-      benefits: [],
-      resume: {
-        desiredPosition: dto.profession,
-        expectedSalary: dto.expectedSalary,
-        salaryCurrency: 'RUB',
-        skills: []
-      }
+      benefits: []
     };
 
     return this.coreAdService.createAdForModeration(ownerId, createDto);

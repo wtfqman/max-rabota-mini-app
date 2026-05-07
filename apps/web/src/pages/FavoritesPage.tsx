@@ -99,11 +99,11 @@ export function FavoritesPage() {
           description={
             items.length === 0
               ? 'Добавляйте интересные объявления в избранное, чтобы быстро находить их позже.'
-              : 'Попробуйте изменить запрос или откройте вакансии без поиска.'
+              : 'Попробуйте изменить запрос или открыть главный экран.'
           }
           action={
-            <LinkButton to={items.length === 0 ? '/vacancies' : '/'}>
-              {items.length === 0 ? 'Перейти к вакансиям' : 'На главный экран'}
+            <LinkButton to={items.length === 0 ? '/' : '/'}>
+              На главный экран
             </LinkButton>
           }
         />
@@ -114,7 +114,7 @@ export function FavoritesPage() {
           {filtered.map((item) => (
             <AdCard
               key={item.favoriteId}
-              to={item.ad.type === 'vacancy' ? `/vacancies/${item.ad.id}` : `/ads/${item.ad.id}`}
+              to={getAdUrl(item.ad.type, item.ad.id)}
               typeLabel={typeLabel(item.ad.type)}
               title={item.ad.title}
               subtitle={item.ad.subtitle}
@@ -141,5 +141,37 @@ function typeLabel(type: string): string {
     return 'Техника';
   }
 
+  if (type === 'material') {
+    return 'Материалы';
+  }
+
+  if (type === 'tool') {
+    return 'Инструменты';
+  }
+
   return 'Вакансия';
+}
+
+function getAdUrl(type: string, adId: string): string {
+  if (type === 'vacancy') {
+    return `/vacancies/${adId}`;
+  }
+
+  if (type === 'resume') {
+    return `/resumes/${adId}`;
+  }
+
+  if (type === 'equipment') {
+    return `/equipment/${adId}`;
+  }
+
+  if (type === 'material') {
+    return `/materials/${adId}`;
+  }
+
+  if (type === 'tool') {
+    return `/tools/${adId}`;
+  }
+
+  return `/ads/${adId}`;
 }

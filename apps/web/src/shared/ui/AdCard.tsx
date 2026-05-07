@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Heart, MapPin, Tag } from 'lucide-react';
+import { BriefcaseBusiness, FileUser, Hammer, Heart, MapPin, Package, Tag, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { StatChip } from './StatChip.js';
 
@@ -31,6 +31,8 @@ export function AdCard({
   isFavorite,
   onFavoriteClick
 }: AdCardProps) {
+  const Icon = getTypeIcon(typeLabel);
+
   return (
     <Link
       to={to}
@@ -45,7 +47,7 @@ export function AdCard({
         ) : (
           <div className="relative flex aspect-[16/9] items-end overflow-hidden bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.18),transparent_40%),linear-gradient(180deg,#101715,#0a0f0d)] px-4 py-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-panel bg-accent-greenSoft text-accent-green">
-              <BriefcaseBusiness size={22} />
+              <Icon size={22} />
             </div>
           </div>
         )}
@@ -53,7 +55,7 @@ export function AdCard({
         <div className="flex items-start justify-between gap-3 px-4 pt-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-panel bg-accent-greenSoft text-accent-green">
-              <BriefcaseBusiness size={22} />
+              <Icon size={22} />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-accent-green">{typeLabel}</p>
@@ -90,6 +92,28 @@ export function AdCard({
       </article>
     </Link>
   );
+}
+
+function getTypeIcon(typeLabel: string) {
+  const normalized = typeLabel.toLowerCase();
+
+  if (normalized.includes('резюме')) {
+    return FileUser;
+  }
+
+  if (normalized.includes('материал')) {
+    return Package;
+  }
+
+  if (normalized.includes('инструмент')) {
+    return Wrench;
+  }
+
+  if (normalized.includes('техник')) {
+    return Hammer;
+  }
+
+  return BriefcaseBusiness;
 }
 
 export function AdCardSkeleton() {

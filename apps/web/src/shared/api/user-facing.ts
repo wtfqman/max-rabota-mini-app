@@ -12,6 +12,7 @@ type ErrorContext =
   | 'vacancy_submit'
   | 'resume_submit'
   | 'equipment_submit'
+  | 'product_submit'
   | 'photo_upload';
 
 const messages: Record<ErrorContext, { default: string; auth: string }> = {
@@ -56,6 +57,10 @@ const messages: Record<ErrorContext, { default: string; auth: string }> = {
     auth: 'Чтобы отправить резюме, откройте mini app заново из MAX.'
   },
   equipment_submit: {
+    default: 'Не удалось отправить объявление. Проверьте данные и попробуйте ещё раз.',
+    auth: 'Чтобы отправить объявление, откройте mini app заново из MAX.'
+  },
+  product_submit: {
     default: 'Не удалось отправить объявление. Проверьте данные и попробуйте ещё раз.',
     auth: 'Чтобы отправить объявление, откройте mini app заново из MAX.'
   },

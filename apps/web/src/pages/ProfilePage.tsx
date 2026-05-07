@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, ListChecks, MessageSquareText, RefreshCw, Settings } from 'lucide-react';
+import { FileUser, Heart, ListChecks, RefreshCw } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
 import { AppPage } from '../shared/ui/AppPage.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
@@ -10,7 +10,7 @@ import { ProfileHeader } from '../shared/ui/ProfileHeader.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { TileCard } from '../shared/ui/TileCard.js';
 import { apiClient } from '../shared/api/client.js';
-import { getRoleLabel, getStatusLabel, getUserFacingError } from '../shared/api/user-facing.js';
+import { getUserFacingError } from '../shared/api/user-facing.js';
 import type { UserProfilePayload } from '../features/ads/ad.types.js';
 import type { AuthProfile } from '../features/auth/auth.types.js';
 
@@ -95,14 +95,13 @@ export function ProfilePage() {
         avatarUrl={profile.profile?.avatarUrl ?? undefined}
         stats={[
           { label: 'объявления', value: String(profile.stats.adsTotal) },
-          { label: 'отзывы', value: String(profile.stats.reviewsTotal) },
-          { label: 'статус', value: getStatusLabel(profile.status) }
+          { label: 'избранное', value: String(profile.stats.favoritesTotal) },
+          { label: 'отзывы', value: String(profile.stats.reviewsTotal) }
         ]}
       />
 
-      <SectionCard title="О профиле" description="Всё, что помогает быстро понять, кто вы и чем занимаетесь.">
+      <SectionCard title="О профиле" description="Короткая информация, которую можно использовать в объявлениях.">
         <div className="grid gap-2 text-sm leading-6 text-text-secondary">
-          <p>Роль в сервисе: <span className="font-semibold text-text-primary">{getRoleLabel(profile.role)}</span></p>
           <p>В Rabst24 с {formatDate(profile.createdAt)}</p>
           {profile.profile?.districtText ? <p>Район: {profile.profile.districtText}</p> : null}
           {profile.profile?.about ? <p>{profile.profile.about}</p> : null}
@@ -110,23 +109,27 @@ export function ProfilePage() {
       </SectionCard>
 
       <section className="grid grid-cols-2 gap-3">
-        <TileCard to="/my-ads" title="Мои объявления" description="Следить за публикациями" icon={<ListChecks size={22} />} />
-        <TileCard to="/reviews" title="Отзывы" description="Посмотреть репутацию" icon={<MessageSquareText size={22} />} tone="cyan" />
+        <TileCard to="/my-ads" title="Мои объявления" description="Ваши публикации" icon={<ListChecks size={22} />} />
+        <TileCard to="/create/resume" title="Резюме" description="Создать или обновить" icon={<FileUser size={22} />} tone="cyan" />
+        <TileCard to="/favorites" title="Избранное" description="Сохранённые объявления" icon={<Heart size={22} />} tone="green" />
       </section>
 
-      <SectionCard title="Разделы" description="Быстрый переход в нужные части mini app.">
+      <SectionCard title="Кабинет" description="Самое нужное для работы с объявлениями.">
         <div className="grid gap-2">
+          <LinkButton to="/my-ads" variant="secondary" icon={<ListChecks size={18} />}>
+            Мои объявления
+          </LinkButton>
+          <LinkButton to="/create/resume" variant="secondary" icon={<FileUser size={18} />}>
+            Создать резюме
+          </LinkButton>
+          <LinkButton to="/favorites" variant="secondary" icon={<Heart size={18} />}>
+            Избранное
+          </LinkButton>
           {profile.role === 'admin' || profile.role === 'moderator' ? (
             <LinkButton to="/moderation" variant="secondary" icon={<ListChecks size={18} />}>
               Очередь модерации
             </LinkButton>
           ) : null}
-          <LinkButton to="/favorites" variant="secondary" icon={<Bell size={18} />}>
-            Избранное
-          </LinkButton>
-          <LinkButton to="/profile" variant="secondary" icon={<Settings size={18} />}>
-            Настройки профиля
-          </LinkButton>
         </div>
       </SectionCard>
     </AppPage>

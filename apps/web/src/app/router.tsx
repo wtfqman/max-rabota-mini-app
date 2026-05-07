@@ -1,8 +1,10 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from './layout/AppShell.js';
 import { AdDetailsPage } from '../pages/AdDetailsPage.js';
+import { CatalogFeedPage } from '../pages/CatalogFeedPage.js';
 import { CreateChooserPage } from '../pages/CreateChooserPage.js';
 import { CreateEquipmentPage } from '../pages/CreateEquipmentPage.js';
+import { CreateProductPage } from '../pages/CreateProductPage.js';
 import { CreateResumePage } from '../pages/CreateResumePage.js';
 import { CreateVacancyPage } from '../pages/CreateVacancyPage.js';
 import { FavoritesPage } from '../pages/FavoritesPage.js';
@@ -43,6 +45,30 @@ export const router = createBrowserRouter([
         element: <AdDetailsPage />
       },
       {
+        path: 'equipment',
+        element: <CatalogFeedPage feed="equipment" />
+      },
+      {
+        path: 'equipment/:adId',
+        element: <AdDetailsPage />
+      },
+      {
+        path: 'materials',
+        element: <CatalogFeedPage feed="materials" />
+      },
+      {
+        path: 'materials/:adId',
+        element: <AdDetailsPage />
+      },
+      {
+        path: 'tools',
+        element: <CatalogFeedPage feed="tools" />
+      },
+      {
+        path: 'tools/:adId',
+        element: <AdDetailsPage />
+      },
+      {
         path: 'ads/:adId',
         element: <AdDetailsPage />
       },
@@ -61,6 +87,14 @@ export const router = createBrowserRouter([
       {
         path: 'create/equipment',
         element: <CreateEquipmentPage />
+      },
+      {
+        path: 'create/material',
+        element: <CreateProductPage type="material" />
+      },
+      {
+        path: 'create/tool',
+        element: <CreateProductPage type="tool" />
       },
       {
         path: 'favorites',

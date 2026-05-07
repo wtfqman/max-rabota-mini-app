@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, Plus, Save, Send, Trash2 } from 'lucide-react';
+import { Eye, Package, Plus, Save, Send, Trash2, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../app/store/app-store.js';
+import { contactTypeOptions } from '../features/vacancies/create-vacancy.types.js';
 import {
-  contactTypeOptions,
-  createEquipmentPayloadSchema,
-  type CreateEquipmentPayload
-} from '../features/equipment/create-equipment.types.js';
+  createProductPayloadSchema,
+  type CreateProductPayload,
+  type ProductType
+} from '../features/products/create-product.types.js';
 import { uploadAdPhotos } from '../features/uploads/upload-flow.js';
 import { apiClient } from '../shared/api/client.js';
+import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AdCard } from '../shared/ui/AdCard.js';
 import { AppPage } from '../shared/ui/AppPage.js';
@@ -22,15 +24,14 @@ import { StatChip } from '../shared/ui/StatChip.js';
 import { SuggestionInput } from '../shared/ui/SuggestionInput.js';
 import { Textarea } from '../shared/ui/Textarea.js';
 
-const DRAFT_KEY = 'rabst24:create-equipment:draft';
 const loadCategorySuggestions = async (q?: string) => (await apiClient.listCategorySuggestions(q)).data;
 const loadDistrictSuggestions = async (q?: string) => (await apiClient.listDistrictSuggestions(q)).data;
 
-interface EquipmentFormState {
+interface ProductFormState {
   title: string;
   categoryText: string;
-  equipmentGroupText: string;
   description: string;
+  priceAmount: string;
   districtText: string;
   address: string;
   contacts: Array<{
@@ -41,13 +42,13 @@ interface EquipmentFormState {
   }>;
 }
 
-type FieldErrors = Partial<Record<keyof CreateEquipmentPayload | 'form', string[]>>;
+type FieldErrors = Partial<Record<keyof CreateProductPayload | 'form', string[]>>;
 
-const initialForm: EquipmentFormState = {
+const initialForm: ProductFormState = {
   title: '',
   categoryText: '',
-  equipmentGroupText: '',
   description: '',
+  priceAmount: '',
   districtText: '',
   address: '',
   contacts: [
@@ -60,18 +61,62 @@ const initialForm: EquipmentFormState = {
   ]
 };
 
-export function CreateEquipmentPage() {
+const productCopy = {
+  material: {
+    title: 'Строительные материалы',
+    single: 'Материал',
+    createTitle: 'Новые материалы',
+    description: 'Добавьте название, цену, адрес и контакт. После проверки объявление появится в разделе материалов.',
+    successTitle: 'Материалы отправлены',
+    successDescription: 'Мы проверим объявление и аккуратно покажем его покупателям.',
+    placeholder: 'Например: кирпич облицовочный, 1200 шт.',
+    route: '/materials',
+    icon: Package,
+    submit: apiClient.createMaterial
+  },
+  tool: {
+    title: 'Инструменты',
+    single: 'Инструмент',
+    createTitle: 'Новый инструмент',
+    description: 'Разместите инструмент с фото, ценой и понятным контактом. После проверки он появится в ленте.',
+    successTitle: 'Инструмент отправлен',
+    successDescription: 'Объявление ушло на проверку и скоро будет готово к публикации.',
+    placeholder: 'Например: перфоратор Bosch SDS-plus',
+    route: '/tools',
+    icon: Wrench,
+    submit: apiClient.createTool
+  }
+} satisfies Record<
+  ProductType,
+  {
+    title: string;
+    single: string;
+    createTitle: string;
+    description: string;
+    successTitle: string;
+    successDescription: string;
+    placeholder: string;
+    route: string;
+    icon: typeof Package;
+    submit: (payload: CreateProductPayload) => Promise<unknown>;
+  }
+>;
+
+export function CreateProductPage({ type }: { type: ProductType }) {
+  const copy = productCopy[type];
+  const Icon = copy.icon;
   const accessToken = useAppStore((state) => state.accessToken);
+  const draftKey = `rabst24:create-${type}:draft`;
   const [mode, setMode] = useState<'form' | 'preview' | 'success'>('form');
-  const [form, setForm] = useState<EquipmentFormState>(() => loadDraft());
+  const [form, setForm] = useState<ProductFormState>(() => loadDraft(draftKey));
   const [photos, setPhotos] = useState<File[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
-  }, [form]);
+    window.localStorage.setItem(draftKey, JSON.stringify(form));
+  }, [draftKey, form]);
 
   const previewCover = useMemo(() => (photos[0] ? URL.createObjectURL(photos[0]) : null), [photos]);
 
@@ -84,18 +129,18 @@ export function CreateEquipmentPage() {
     [previewCover]
   );
 
-  const updateField = <TKey extends keyof EquipmentFormState>(key: TKey, value: EquipmentFormState[TKey]) => {
+  const updateField = <TKey extends keyof ProductFormState>(key: TKey, value: ProductFormState[TKey]) => {
     setForm((current) => ({
       ...current,
       [key]: value
     }));
   };
 
-  const buildPayload = (uploadedPhotos: CreateEquipmentPayload['photos'] = []): CreateEquipmentPayload => ({
+  const buildPayload = (uploadedPhotos: CreateProductPayload['photos'] = []): CreateProductPayload => ({
     title: form.title.trim(),
-    categoryText: form.categoryText.trim(),
-    equipmentGroupText: emptyToUndefined(form.equipmentGroupText),
+    categoryText: emptyToUndefined(form.categoryText),
     description: form.description.trim(),
+    priceAmount: toNumber(form.priceAmount),
     districtText: emptyToUndefined(form.districtText),
     address: emptyToUndefined(form.address),
     contacts: form.contacts
@@ -109,12 +154,12 @@ export function CreateEquipmentPage() {
     photos: uploadedPhotos
   });
 
-  const validate = (): CreateEquipmentPayload | null => {
-    const result = createEquipmentPayloadSchema.safeParse(buildPayload());
+  const validate = (): CreateProductPayload | null => {
+    const result = createProductPayloadSchema.safeParse(buildPayload());
 
     if (!result.success) {
       setErrors(result.error.flatten().fieldErrors as FieldErrors);
-      setSubmitError('Проверьте обязательные поля и попробуйте еще раз.');
+      setSubmitError('Проверьте обязательные поля и попробуйте ещё раз.');
       setMode('form');
       return null;
     }
@@ -139,7 +184,7 @@ export function CreateEquipmentPage() {
     }
 
     if (!accessToken) {
-      setSubmitError('Откройте приложение из MAX, чтобы отправить технику.');
+      setSubmitError('Откройте приложение из MAX, чтобы отправить объявление.');
       setMode('form');
       return;
     }
@@ -149,19 +194,23 @@ export function CreateEquipmentPage() {
       setSubmitError(null);
 
       const uploadedPhotos = await uploadAdPhotos(photos, validPayload.title, 8);
-      await apiClient.createEquipment(buildPayload(uploadedPhotos.map((photo) => ({
-        storageKey: photo.storageKey,
-        url: photo.url,
-        previewUrl: photo.previewUrl ?? undefined,
-        mimeType: photo.mimeType,
-        sizeBytes: photo.sizeBytes,
-        altText: photo.altText ?? undefined
-      }))));
+      await copy.submit(
+        buildPayload(
+          uploadedPhotos.map((photo) => ({
+            storageKey: photo.storageKey,
+            url: photo.url,
+            previewUrl: photo.previewUrl ?? undefined,
+            mimeType: photo.mimeType,
+            sizeBytes: photo.sizeBytes,
+            altText: photo.altText ?? undefined
+          }))
+        )
+      );
 
-      window.localStorage.removeItem(DRAFT_KEY);
+      window.localStorage.removeItem(draftKey);
       setMode('success');
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Не удалось отправить технику');
+      setSubmitError(getUserFacingError(error, 'product_submit'));
       setMode('form');
     } finally {
       setIsSubmitting(false);
@@ -172,8 +221,8 @@ export function CreateEquipmentPage() {
     return (
       <AppPage>
         <EmptyState
-          title="Техника отправлена"
-          description="Мы проверим объявление и добавим его в раздел техники."
+          title={copy.successTitle}
+          description={copy.successDescription}
           action={
             <div className="grid w-full gap-2">
               <Link
@@ -181,6 +230,12 @@ export function CreateEquipmentPage() {
                 className="inline-flex min-h-12 items-center justify-center rounded-panel bg-accent-green px-4 text-base font-semibold text-surface-950 shadow-glow"
               >
                 Мои объявления
+              </Link>
+              <Link
+                to={copy.route}
+                className="inline-flex min-h-12 items-center justify-center rounded-panel border border-white/8 bg-surface-850 px-4 text-base font-semibold text-text-secondary"
+              >
+                Открыть раздел
               </Link>
             </div>
           }
@@ -194,21 +249,21 @@ export function CreateEquipmentPage() {
 
     return (
       <AppPage>
-        <div className="space-y-2">
+        <div className="space-y-2 app-fade-up">
           <p className="text-sm font-semibold uppercase text-accent-green">Предпросмотр</p>
           <h1 className="text-3xl font-black text-text-primary">{payload.title}</h1>
           <p className="text-base leading-6 text-text-secondary">
-            Проверьте карточку техники перед отправкой.
+            Проверьте карточку перед отправкой. Так объявление будет выглядеть в ленте.
           </p>
         </div>
 
         <AdCard
           to="#"
-          typeLabel="Техника"
+          typeLabel={copy.single}
           title={payload.title}
-          subtitle={payload.equipmentGroupText}
           coverImageUrl={previewCover}
           location={payload.address ?? payload.districtText}
+          price={payload.priceAmount ? `${payload.priceAmount} ₽` : undefined}
           category={payload.categoryText}
           description={payload.description}
         />
@@ -217,19 +272,10 @@ export function CreateEquipmentPage() {
           <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{payload.description}</p>
         </SectionCard>
 
-        <SectionCard title="Данные">
-          <div className="grid gap-2">
-            <PreviewFact label="Категория" value={payload.categoryText} />
-            <PreviewFact label="Группа техники" value={payload.equipmentGroupText} />
-            <PreviewFact label="Район / адрес" value={payload.address ?? payload.districtText} />
-            <PreviewFact label="Фото" value={`${photos.length}/8`} />
-          </div>
-        </SectionCard>
-
         <SectionCard title="Контакты">
           <div className="grid gap-2">
             {payload.contacts.map((contact) => (
-              <div key={`${contact.type}-${contact.value}`} className="rounded-panel bg-surface-900 p-3">
+              <div key={`${contact.type}-${contact.value}`} className="rounded-panel border border-white/8 bg-surface-900/90 p-3">
                 <p className="text-sm font-semibold text-text-primary">{contact.label ?? contact.type}</p>
                 <p className="text-sm text-text-secondary">{contact.value}</p>
               </div>
@@ -251,12 +297,12 @@ export function CreateEquipmentPage() {
 
   return (
     <AppPage>
-      <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase text-accent-green">Создание</p>
-        <h1 className="text-3xl font-black text-text-primary">Новая техника</h1>
-        <p className="text-base leading-6 text-text-secondary">
-          Добавьте технику, контакты и район, чтобы заказчики сразу понимали условия.
-        </p>
+      <div className="space-y-2 app-fade-up">
+        <div className="flex h-12 w-12 items-center justify-center rounded-panel bg-accent-greenSoft text-accent-green">
+          <Icon size={24} />
+        </div>
+        <h1 className="text-3xl font-black text-text-primary">{copy.createTitle}</h1>
+        <p className="text-base leading-6 text-text-secondary">{copy.description}</p>
       </div>
 
       {submitError ? (
@@ -266,52 +312,53 @@ export function CreateEquipmentPage() {
       ) : null}
 
       <form className="grid gap-5" onSubmit={(event) => event.preventDefault()}>
-        <FormSection title="Техника">
+        <FormSection title="Объявление">
           <Input
             label="Название"
-            placeholder="Экскаватор-погрузчик JCB 3CX"
+            placeholder={copy.placeholder}
             value={form.title}
+            error={firstError(errors.title)}
             onChange={(event) => updateField('title', event.target.value)}
           />
-          <FieldError errors={errors.title} />
           <SuggestionInput
-            label="Категория техники"
-            placeholder="Спецтехника, погрузчики, аренда"
+            label="Категория"
+            placeholder="Например: кирпич, сухие смеси, электроинструмент"
             value={form.categoryText}
             loadSuggestions={loadCategorySuggestions}
             onChange={(event) => updateField('categoryText', event.target.value)}
           />
-          <FieldError errors={errors.categoryText} />
           <Input
-            label="Группа техники"
-            placeholder="Опционально: земляные работы, складская техника"
-            value={form.equipmentGroupText}
-            onChange={(event) => updateField('equipmentGroupText', event.target.value)}
+            label="Цена"
+            placeholder="Например: 15000"
+            inputMode="numeric"
+            value={form.priceAmount}
+            error={firstError(errors.priceAmount)}
+            onChange={(event) => updateField('priceAmount', event.target.value)}
           />
           <Textarea
             label="Описание"
-            placeholder="Состояние, комплектация, доступность, условия аренды или продажи."
+            placeholder="Состояние, количество, условия передачи и важные детали."
             value={form.description}
+            error={firstError(errors.description)}
             onChange={(event) => updateField('description', event.target.value)}
           />
-          <FieldError errors={errors.description} />
         </FormSection>
 
         <FormSection title="Фото" description="До 8 изображений. Первое фото станет обложкой.">
           <PhotoUploader files={photos} maxFiles={8} onFilesChange={setPhotos} />
         </FormSection>
 
-        <FormSection title="Район / адрес">
+        <FormSection title="Адрес">
           <SuggestionInput
             label="Район"
-            placeholder="ЮВАО, Подольск, промзона"
+            placeholder="ЮВАО, Подольск, центр"
             value={form.districtText}
             loadSuggestions={loadDistrictSuggestions}
             onChange={(event) => updateField('districtText', event.target.value)}
           />
           <Input
-            label="Адрес / ориентир"
-            placeholder="Опционально"
+            label="Адрес или ориентир"
+            placeholder="Где можно посмотреть или забрать"
             value={form.address}
             onChange={(event) => updateField('address', event.target.value)}
           />
@@ -319,7 +366,7 @@ export function CreateEquipmentPage() {
 
         <FormSection title="Контакты">
           <ContactsEditor value={form.contacts} onChange={(contacts) => updateField('contacts', contacts)} />
-          <FieldError errors={errors.contacts} />
+          {firstError(errors.contacts) ? <p className="text-sm text-red-200">{firstError(errors.contacts)}</p> : null}
         </FormSection>
 
         <SectionCard title="Черновик" description="Форма сохраняется на этом устройстве автоматически.">
@@ -346,31 +393,31 @@ function ContactsEditor({
   value,
   onChange
 }: {
-  value: EquipmentFormState['contacts'];
-  onChange: (value: EquipmentFormState['contacts']) => void;
+  value: ProductFormState['contacts'];
+  onChange: (value: ProductFormState['contacts']) => void;
 }) {
   return (
     <div className="grid gap-3">
       {value.map((contact, index) => (
-        <div key={index} className="grid gap-3 rounded-panel border border-line bg-surface-900 p-3">
+        <div key={index} className="grid gap-3 rounded-panel border border-white/8 bg-surface-900/90 p-3">
           <Select
             label="Тип"
             value={contact.type}
             options={contactTypeOptions.map((option) => ({ value: option.value, label: option.label }))}
             onChange={(event) =>
               updateArrayItem(value, onChange, index, {
-                type: event.target.value as EquipmentFormState['contacts'][number]['type']
+                type: event.target.value as ProductFormState['contacts'][number]['type']
               })
             }
           />
           <Input
             label="Подпись"
-            placeholder="Диспетчер, владелец, сайт"
+            placeholder="Продавец, склад, MAX"
             value={contact.label}
             onChange={(event) => updateArrayItem(value, onChange, index, { label: event.target.value })}
           />
           <Input
-            label="Значение"
+            label="Телефон или контакт"
             placeholder="@username или телефон"
             value={contact.value}
             onChange={(event) => updateArrayItem(value, onChange, index, { value: event.target.value })}
@@ -397,25 +444,8 @@ function ContactsEditor({
   );
 }
 
-function PreviewFact({ label, value }: { label: string; value?: string }) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-panel bg-surface-900 p-3">
-      <p className="text-xs font-semibold uppercase text-text-muted">{label}</p>
-      <p className="mt-1 text-sm font-bold text-text-primary">{value}</p>
-    </div>
-  );
-}
-
-function FieldError({ errors }: { errors?: string[] }) {
-  if (!errors?.length) {
-    return null;
-  }
-
-  return <p className="-mt-2 text-sm font-semibold text-red-200">{errors[0]}</p>;
+function firstError(errors?: string[]) {
+  return errors?.[0];
 }
 
 function updateArrayItem<TItem>(
@@ -432,9 +462,19 @@ function emptyToUndefined(value: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-function loadDraft(): EquipmentFormState {
+function toNumber(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const number = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function loadDraft(draftKey: string): ProductFormState {
   try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
+    const raw = window.localStorage.getItem(draftKey);
 
     if (!raw) {
       return initialForm;
@@ -443,7 +483,7 @@ function loadDraft(): EquipmentFormState {
     return {
       ...initialForm,
       ...JSON.parse(raw)
-    } as EquipmentFormState;
+    } as ProductFormState;
   } catch {
     return initialForm;
   }

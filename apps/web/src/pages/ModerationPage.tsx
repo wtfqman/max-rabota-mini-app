@@ -65,8 +65,8 @@ export function ModerationPage() {
   const reload = () => setReloadKey((value) => value + 1);
 
   const approve = async (adId: string) => {
-    const response = await apiClient.approveModerationAd(adId);
-    setActionMessage(`Одобрено. Публикация: ${response.data.publication?.status ?? 'нет данных'}`);
+    await apiClient.approveModerationAd(adId);
+    setActionMessage('Объявление готово к публикации.');
     reload();
   };
 
@@ -92,9 +92,9 @@ export function ModerationPage() {
   return (
     <AppPage>
       <div className="space-y-2">
-        <p className="text-sm font-semibold uppercase text-accent-green">Admin</p>
+        <p className="text-sm font-semibold uppercase text-accent-green">Проверка</p>
         <h1 className="text-3xl font-black text-text-primary">Модерация</h1>
-        <p className="text-base leading-6 text-text-secondary">Очередь объявлений со статусом pending moderation.</p>
+        <p className="text-base leading-6 text-text-secondary">Очередь объявлений, которые ждут проверки.</p>
       </div>
 
       {actionMessage ? (
@@ -114,7 +114,7 @@ export function ModerationPage() {
       ) : null}
 
       {status === 'ready' && ads.length === 0 ? (
-        <EmptyState title="Очередь пуста" description="Новые объявления появятся здесь после отправки на модерацию." />
+        <EmptyState title="Очередь пуста" description="Новые объявления появятся здесь после отправки." />
       ) : null}
 
       {status === 'ready' && ads.length > 0 ? (
@@ -134,7 +134,7 @@ export function ModerationPage() {
                     <p className="truncate text-base font-bold text-text-primary">{ad.title}</p>
                     <p className="text-sm text-text-secondary">{typeLabel(ad.type)}</p>
                   </div>
-                  <StatChip label={ad.status} tone="amber" />
+                  <StatChip label={statusLabel(ad.status)} tone="amber" />
                 </div>
               </button>
             ))}
@@ -159,19 +159,19 @@ export function ModerationPage() {
                   <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{selected.description}</p>
                 ) : null}
                 <Textarea
-                  label="Причина для reject/hide"
+                  label="Причина решения"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <ActionButton icon={<CheckCircle2 size={18} />} onClick={() => void approve(selected.id)}>
-                    Approve
+                    Опубликовать
                   </ActionButton>
                   <ActionButton variant="danger" icon={<XCircle size={18} />} onClick={() => void reject(selected.id)}>
-                    Reject
+                    Вернуть
                   </ActionButton>
                   <ActionButton variant="secondary" icon={<Eye size={18} />} onClick={() => void hide(selected.id)}>
-                    Hide
+                    Скрыть
                   </ActionButton>
                 </div>
               </div>
@@ -192,5 +192,27 @@ function typeLabel(type: string): string {
     return 'Техника';
   }
 
+  if (type === 'material') {
+    return 'Материалы';
+  }
+
+  if (type === 'tool') {
+    return 'Инструменты';
+  }
+
   return 'Вакансия';
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    draft: 'Черновик',
+    pending_moderation: 'Ждёт проверки',
+    approved: 'Готово',
+    rejected: 'Нужны правки',
+    published: 'Опубликовано',
+    hidden: 'Скрыто',
+    archived: 'В архиве'
+  };
+
+  return labels[status] ?? 'Ждёт проверки';
 }

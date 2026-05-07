@@ -1,21 +1,19 @@
 import { z } from 'zod';
 import { adListQuerySchema } from '@rabst24/shared';
 
-export const resumeListQuerySchema = adListQuerySchema.omit({
+export const tradeListQuerySchema = adListQuerySchema.omit({
   type: true,
   schedule: true,
   experience: true
 });
 
-export const createResumeSchema = z.object({
-  name: z.string().trim().min(2).max(180),
-  profession: z.string().trim().min(2).max(180),
-  description: z.string().trim().min(20).max(4000),
-  experienceText: z.string().trim().min(2).max(1200),
-  expectedSalary: z.coerce.number().nonnegative().optional(),
+export const createTradeAdSchema = z.object({
+  title: z.string().trim().min(3).max(180),
+  categoryText: z.string().trim().max(120).optional(),
+  description: z.string().trim().min(10).max(4000),
+  priceAmount: z.coerce.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
-  categoryText: z.string().trim().max(120).optional(),
   contacts: z
     .array(
       z.object({
@@ -40,8 +38,8 @@ export const createResumeSchema = z.object({
         altText: z.string().trim().max(255).optional()
       })
     )
-    .max(1)
+    .max(8)
     .default([])
 });
 
-export type CreateResumeDto = z.infer<typeof createResumeSchema>;
+export type CreateTradeAdDto = z.infer<typeof createTradeAdSchema>;

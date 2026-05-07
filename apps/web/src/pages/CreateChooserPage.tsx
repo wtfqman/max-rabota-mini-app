@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, FileUser, Hammer, Sparkles } from 'lucide-react';
+import { ArrowRight, BriefcaseBusiness, FileUser, Package, Sparkles, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AppPage } from '../shared/ui/AppPage.js';
 import { LinkButton } from '../shared/ui/LinkButton.js';
@@ -8,7 +8,7 @@ const options = [
   {
     to: '/create/vacancy',
     title: 'Вакансия',
-    description: 'Для работодателей и тех, кто ищет сотрудников на смену, проект или постоянную работу.',
+    description: 'Специальность, описание, зарплата, фото, адрес и контакты.',
     icon: BriefcaseBusiness,
     accent: 'green',
     badge: 'Найти сотрудника'
@@ -16,18 +16,26 @@ const options = [
   {
     to: '/create/resume',
     title: 'Резюме',
-    description: 'Для специалистов, которые хотят рассказать о себе, опыте и формате сотрудничества.',
+    description: 'Фото, ФИО, специальность, описание о себе, контакт и желаемая зарплата.',
     icon: FileUser,
     accent: 'cyan',
     badge: 'Рассказать о себе'
   },
   {
-    to: '/create/equipment',
-    title: 'Техника',
-    description: 'Для аренды, продажи и размещения спецтехники, транспорта и профильных услуг.',
-    icon: Hammer,
+    to: '/create/material',
+    title: 'Строительные материалы',
+    description: 'Название, фото, описание, цена, адрес и телефон.',
+    icon: Package,
     accent: 'amber',
-    badge: 'Разместить технику'
+    badge: 'Продать материалы'
+  },
+  {
+    to: '/create/tool',
+    title: 'Инструменты',
+    description: 'Название, фото, описание, цена, адрес и контакт.',
+    icon: Wrench,
+    accent: 'green',
+    badge: 'Разместить инструмент'
   }
 ] as const;
 
@@ -45,20 +53,8 @@ export function CreateChooserPage() {
               Что хотите разместить?
             </h1>
             <p className="max-w-md text-base leading-6 text-text-secondary">
-              Выберите формат объявления. Сразу откроем нужную форму, без лишних шагов и
-              перегруженного интерфейса.
+              Выберите тип объявления. Сразу откроем нужную форму с предпросмотром.
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs font-semibold text-text-muted">
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-              Тёмная тема
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-              Быстрый старт
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5">
-              Автосохранение черновика
-            </span>
           </div>
         </div>
       </section>
@@ -116,7 +112,7 @@ export function CreateChooserPage() {
 
       <SectionCard
         title="Нужное откроется сразу"
-        description="Каждый вариант ведёт в свою форму: вакансия, резюме или техника. Избранное остаётся доступным в профиле."
+        description="Каждый вариант ведёт в свою форму. Избранное и ваши объявления остаются в профиле."
       >
         <div className="flex flex-col gap-3 sm:flex-row">
           <LinkButton to="/profile" variant="secondary">

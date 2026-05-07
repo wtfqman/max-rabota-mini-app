@@ -1,6 +1,6 @@
 import type { PublicAdCard, PublicVacancyDetail, VacancyListMeta } from '../vacancies/vacancy.types.js';
 
-export type PublicAdType = 'vacancy' | 'resume' | 'equipment';
+export type PublicAdType = 'vacancy' | 'resume' | 'equipment' | 'material' | 'tool';
 export type PublicAdStatus =
   | 'draft'
   | 'pending_moderation'
@@ -21,13 +21,17 @@ export interface PublicResumeDetail extends PublicAdCard {
     value: string;
     isPreferred: boolean;
   }>;
+  owner: PublicVacancyDetail['owner'];
   photos: PublicVacancyDetail['photos'];
   updatedAt: string;
   resume: {
     name: string;
     profession: string | null;
+    desiredPosition: string | null;
     experienceText: string | null;
     experienceYears: number | null;
+    expectedSalary: string | null;
+    salaryCurrency: string;
     skills: string[];
   };
 }
@@ -37,6 +41,7 @@ export interface PublicEquipmentDetail extends PublicAdCard {
   status: PublicAdStatus;
   description: string | null;
   contacts: PublicResumeDetail['contacts'];
+  owner: PublicVacancyDetail['owner'];
   photos: PublicVacancyDetail['photos'];
   updatedAt: string;
   equipment: {
@@ -49,7 +54,24 @@ export interface PublicEquipmentDetail extends PublicAdCard {
   };
 }
 
-export type PublicAdDetail = PublicVacancyDetail | PublicResumeDetail | PublicEquipmentDetail;
+export interface PublicProductDetail extends PublicAdCard {
+  type: 'material' | 'tool';
+  status: PublicAdStatus;
+  description: string | null;
+  contacts: PublicResumeDetail['contacts'];
+  owner: PublicVacancyDetail['owner'];
+  photos: PublicVacancyDetail['photos'];
+  updatedAt: string;
+  product: {
+    name: string;
+    category: string | null;
+    price: string | null;
+    currency: string;
+    address: string | null;
+  };
+}
+
+export type PublicAdDetail = PublicVacancyDetail | PublicResumeDetail | PublicEquipmentDetail | PublicProductDetail;
 
 export interface OwnedAdCard extends PublicAdCard {
   description: string | null;

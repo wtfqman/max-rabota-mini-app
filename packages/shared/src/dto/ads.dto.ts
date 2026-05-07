@@ -61,6 +61,8 @@ export const createAdSchema = z.object({
     .object({
       desiredPosition: z.string().trim().max(160).optional(),
       experienceYears: z.coerce.number().int().min(0).max(80).optional(),
+      expectedSalary: z.coerce.number().nonnegative().optional(),
+      salaryCurrency: z.string().trim().length(3).optional(),
       skills: z.array(z.string().trim().max(80)).default([])
     })
     .optional(),

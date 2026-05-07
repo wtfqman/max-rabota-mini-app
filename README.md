@@ -22,9 +22,9 @@ The MAX bot is only an entry point. The primary product is the MAX mini app on `
 ## Implemented First-Version Flows
 
 - MAX init/auth: `POST /api/auth/max/verify`.
-- Public ad lists/details for vacancies, resumes, and equipment.
-- Create vacancy/resume/equipment ads with `pending_moderation` status.
-- Mobile-first mini app forms with preview and local draft for vacancy creation.
+- Public ad lists/details for vacancies, resumes, equipment, construction materials, and tools.
+- Create vacancy/resume/material/tool ads with review before publishing.
+- Mobile-first mini app forms with preview and local draft for create flows.
 - Moderation queue with approve/reject/hide actions.
 - Automatic channel publishing after approve, with logs and manual retry endpoint.
 - User cabinet: profile, my ads, status filters, edit/hide/resubmit.
@@ -42,6 +42,8 @@ npm run prisma:generate
 npm run prisma:migrate
 npm run prisma:seed
 ```
+
+Run commands from this repository root. If npm says it cannot find `package.json`, move one folder deeper into `max mini app bot hard` and run the command again.
 
 Run API:
 
