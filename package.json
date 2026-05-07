@@ -1,0 +1,73 @@
+{
+  "name": "rabst24-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:api",
+    "dev:api": "tsx watch apps/api/src/main.ts",
+    "dev:bot": "tsx watch apps/bot/src/main.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts --host 0.0.0.0",
+    "start:api": "node dist/apps/api/src/main.js",
+    "start:bot": "node dist/apps/bot/src/main.js",
+    "build": "npm run build:server && npm run build:web",
+    "build:prod": "npm run build",
+    "build:server": "node scripts/clean-server-dist.mjs && tsc -p tsconfig.json && tsc-alias -p tsconfig.json && node scripts/rewrite-dist-package-imports.mjs",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "deploy:check": "npm run typecheck && npm run lint && npm run build:prod",
+    "pm2:start": "pm2 start deploy/pm2/ecosystem.config.cjs --env production",
+    "pm2:restart": "pm2 restart deploy/pm2/ecosystem.config.cjs --env production",
+    "pm2:stop": "pm2 stop deploy/pm2/ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs rabst24-api rabst24-bot",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "prisma:generate": "prisma generate --schema packages/db/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema packages/db/prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema packages/db/prisma/schema.prisma",
+    "prisma:seed": "tsx packages/db/prisma/seed.ts",
+    "prisma:studio": "prisma studio --schema packages/db/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.0",
+    "@vitejs/plugin-react": "^5.0.3",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "lucide-react": "^0.544.0",
+    "pino": "^9.7.0",
+    "pino-http": "^10.5.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1",
+    "zod": "^4.1.8",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.35.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^24.3.1",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.35.0",
+    "pino-pretty": "^13.1.1",
+    "postcss": "^8.5.6",
+    "prisma": "^6.16.0",
+    "tailwindcss": "^3.4.17",
+    "tsc-alias": "^1.8.16",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vite": "^7.1.5"
+  },
+  "engines": {
+    "node": ">=20.20.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@rabst24/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts"
+  },
+  "dependencies": {
+    "@rabst24/bot-core": "file:../../packages/bot-core",
+    "@rabst24/config": "file:../../packages/config",
+    "@rabst24/core": "file:../../packages/core",
+    "@rabst24/db": "file:../../packages/db",
+    "@rabst24/max-api": "file:../../packages/max-api"
+  }
+}

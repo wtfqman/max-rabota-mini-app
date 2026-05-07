@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"],
+    "paths": {
+      "@rabst24/bot-core": ["packages/bot-core/src/index.ts"],
+      "@rabst24/config": ["packages/config/src/index.ts"],
+      "@rabst24/core": ["packages/core/src/index.ts"],
+      "@rabst24/db": ["packages/db/src/index.ts"],
+      "@rabst24/max-api": ["packages/max-api/src/index.ts"],
+      "@rabst24/shared": ["packages/shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/bot/src/**/*.ts",
+    "packages/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "apps/web"]
+}

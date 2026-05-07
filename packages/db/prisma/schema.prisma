@@ -1,0 +1,499 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum AdType {
+  VACANCY
+  RESUME
+  EQUIPMENT
+}
+
+enum AdStatus {
+  DRAFT
+  PENDING_MODERATION
+  APPROVED
+  REJECTED
+  PUBLISHED
+  HIDDEN
+  ARCHIVED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  SHIFT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum WorkFormat {
+  ONSITE
+  REMOTE
+  HYBRID
+  FIELD
+}
+
+enum SalaryPeriod {
+  HOUR
+  DAY
+  WEEK
+  MONTH
+  PROJECT
+}
+
+enum EquipmentCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum AdContactType {
+  MAX
+  PHONE
+  EMAIL
+  WEBSITE
+  OTHER
+}
+
+enum ModerationAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  HIDDEN
+  RETURNED
+  ARCHIVED
+  RESTORED
+  AUTO_FLAGGED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+  DELETED
+}
+
+enum ChannelPublishStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id              String   @id @default(cuid())
+  maxUserId       String   @unique @map("max_user_id")
+  maxUsername     String?  @map("max_username")
+  firstName       String?  @map("first_name")
+  lastName        String?  @map("last_name")
+  displayName     String?  @map("display_name")
+  locale          String?
+  role            UserRole @default(USER)
+  status          UserStatus @default(ACTIVE)
+  startedAt       DateTime? @map("started_at")
+  lastSeenAt      DateTime? @map("last_seen_at")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  profile         UserProfile?
+  ads             Ad[]
+  favorites       Favorite[]
+  reviewsWritten  Review[] @relation("ReviewAuthor")
+  reviewsReceived Review[] @relation("ReviewSubject")
+  moderationLogs  ModerationLog[] @relation("ModerationLogModerator")
+
+  @@index([status])
+  @@index([role])
+  @@index([maxUsername])
+  @@index([lastSeenAt])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model UserProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique @map("user_id")
+  city          String?
+  districtText  String?   @map("district_text")
+  about         String?
+  avatarUrl     String?   @map("avatar_url")
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([city])
+  @@index([districtText])
+  @@index([deletedAt])
+  @@map("user_profiles")
+}
+
+model Ad {
+  id                 String    @id @default(cuid())
+  ownerId            String    @map("owner_id")
+  type               AdType
+  status             AdStatus  @default(PENDING_MODERATION)
+  title              String
+  description        String?
+  city               String?
+  districtText       String?   @map("district_text")
+  categoryText       String?   @map("category_text")
+  locationLat        Float?    @map("location_lat")
+  locationLon        Float?    @map("location_lon")
+  priceAmount        Float?    @map("price_amount")
+  currency           String    @default("RUB")
+  metadataJson       String?   @map("metadata_json")
+  moderatedAt        DateTime? @map("moderated_at")
+  publishedAt        DateTime? @map("published_at")
+  hiddenAt           DateTime? @map("hidden_at")
+  archivedAt         DateTime? @map("archived_at")
+  expiresAt          DateTime? @map("expires_at")
+  deletedAt          DateTime? @map("deleted_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  owner              User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  vacancyDetails     VacancyDetails?
+  resumeDetails      ResumeDetails?
+  equipmentDetails   EquipmentDetails?
+  photos             AdPhoto[]
+  contacts           AdContact[]
+  requirements       AdRequirement[]
+  responsibilities   AdResponsibility[]
+  benefits           AdBenefit[]
+  favorites          Favorite[]
+  reviews            Review[]
+  moderationLogs     ModerationLog[]
+  channelPublishLogs ChannelPublishLog[]
+
+  @@index([ownerId])
+  @@index([ownerId, status, updatedAt])
+  @@index([type, status])
+  @@index([type, status, publishedAt])
+  @@index([status, moderatedAt])
+  @@index([city])
+  @@index([districtText])
+  @@index([categoryText])
+  @@index([publishedAt])
+  @@index([deletedAt])
+  @@map("ads")
+}
+
+model VacancyDetails {
+  id                  String          @id @default(cuid())
+  adId                String          @unique @map("ad_id")
+  companyName         String?         @map("company_name")
+  position            String?
+  employmentType      EmploymentType? @map("employment_type")
+  workFormat          WorkFormat?     @map("work_format")
+  salaryFrom          Float?          @map("salary_from")
+  salaryTo            Float?          @map("salary_to")
+  salaryCurrency      String          @default("RUB") @map("salary_currency")
+  salaryPeriod        SalaryPeriod?   @map("salary_period")
+  isSalaryNegotiable  Boolean         @default(false) @map("is_salary_negotiable")
+  schedule            String?
+  experience          String?
+  education           String?
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  ad                  Ad              @relation(fields: [adId], references: [id], onDelete: Cascade)
+  metroStations       VacancyMetroStation[]
+
+  @@index([employmentType])
+  @@index([workFormat])
+  @@index([salaryFrom])
+  @@map("vacancy_details")
+}
+
+model ResumeDetails {
+  id               String          @id @default(cuid())
+  adId             String          @unique @map("ad_id")
+  desiredPosition  String?         @map("desired_position")
+  experienceYears  Int?            @map("experience_years")
+  employmentType   EmploymentType? @map("employment_type")
+  workFormat       WorkFormat?     @map("work_format")
+  expectedSalary   Float?          @map("expected_salary")
+  salaryCurrency   String          @default("RUB") @map("salary_currency")
+  skillsJson       String?         @map("skills_json")
+  education        String?
+  availability     String?
+  portfolioUrl     String?         @map("portfolio_url")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  ad               Ad              @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([desiredPosition])
+  @@index([experienceYears])
+  @@index([employmentType])
+  @@index([workFormat])
+  @@map("resume_details")
+}
+
+model EquipmentDetails {
+  id              String             @id @default(cuid())
+  adId            String             @unique @map("ad_id")
+  categoryText    String?            @map("category_text")
+  condition       EquipmentCondition?
+  brand           String?
+  model           String?
+  productionYear  Int?               @map("production_year")
+  rentalPrice     Float?             @map("rental_price")
+  salePrice       Float?             @map("sale_price")
+  depositAmount   Float?             @map("deposit_amount")
+  currency        String             @default("RUB")
+  availability    String?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  ad              Ad                 @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([categoryText])
+  @@index([condition])
+  @@index([brand])
+  @@index([model])
+  @@map("equipment_details")
+}
+
+model AdPhoto {
+  id          String    @id @default(cuid())
+  adId        String    @map("ad_id")
+  storageKey  String    @unique @map("storage_key")
+  url         String
+  previewUrl  String?   @map("preview_url")
+  mimeType    String?   @map("mime_type")
+  sizeBytes   Int?      @map("size_bytes")
+  width       Int?
+  height      Int?
+  sortOrder   Int       @default(0) @map("sort_order")
+  altText     String?   @map("alt_text")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  ad          Ad        @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, sortOrder])
+  @@index([deletedAt])
+  @@map("ad_photos")
+}
+
+model AdContact {
+  id          String        @id @default(cuid())
+  adId        String        @map("ad_id")
+  type        AdContactType
+  label       String?
+  value       String
+  isPreferred Boolean       @default(false) @map("is_preferred")
+  isPublic    Boolean       @default(true) @map("is_public")
+  sortOrder   Int           @default(0) @map("sort_order")
+  deletedAt   DateTime?     @map("deleted_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  ad          Ad            @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, sortOrder])
+  @@index([adId, type])
+  @@index([deletedAt])
+  @@map("ad_contacts")
+}
+
+model MetroStation {
+  id           String    @id @default(cuid())
+  city         String
+  name         String
+  lineName     String?   @map("line_name")
+  lineColor    String?   @map("line_color")
+  externalCode String?   @map("external_code")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  vacancies    VacancyMetroStation[]
+
+  @@unique([city, name, lineName])
+  @@index([city])
+  @@index([isActive])
+  @@map("metro_stations")
+}
+
+model VacancyMetroStation {
+  vacancyDetailsId String   @map("vacancy_details_id")
+  metroStationId   String   @map("metro_station_id")
+  walkingMinutes   Int?     @map("walking_minutes")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  vacancyDetails   VacancyDetails @relation(fields: [vacancyDetailsId], references: [id], onDelete: Cascade)
+  metroStation     MetroStation   @relation(fields: [metroStationId], references: [id], onDelete: Restrict)
+
+  @@id([vacancyDetailsId, metroStationId])
+  @@index([metroStationId])
+  @@index([vacancyDetailsId, sortOrder])
+  @@map("vacancy_metro_stations")
+}
+
+model AdRequirement {
+  id        String   @id @default(cuid())
+  adId      String   @map("ad_id")
+  text      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, sortOrder])
+  @@unique([adId, sortOrder])
+  @@map("ad_requirements")
+}
+
+model AdResponsibility {
+  id        String   @id @default(cuid())
+  adId      String   @map("ad_id")
+  text      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, sortOrder])
+  @@unique([adId, sortOrder])
+  @@map("ad_responsibilities")
+}
+
+model AdBenefit {
+  id        String   @id @default(cuid())
+  adId      String   @map("ad_id")
+  text      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, sortOrder])
+  @@unique([adId, sortOrder])
+  @@map("ad_benefits")
+}
+
+model Favorite {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  adId      String    @map("ad_id")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad        Ad        @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, adId])
+  @@index([userId, createdAt])
+  @@index([adId])
+  @@index([deletedAt])
+  @@map("favorites")
+}
+
+model Review {
+  id               String       @id @default(cuid())
+  authorId         String       @map("author_id")
+  subjectId        String       @map("subject_id")
+  adId             String?      @map("ad_id")
+  rating           Int
+  text             String?
+  status           ReviewStatus @default(PENDING)
+  moderationReason String?      @map("moderation_reason")
+  publishedAt      DateTime?    @map("published_at")
+  moderatedAt      DateTime?    @map("moderated_at")
+  deletedAt        DateTime?    @map("deleted_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  author           User         @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  subject          User         @relation("ReviewSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  ad               Ad?          @relation(fields: [adId], references: [id], onDelete: SetNull)
+
+  @@index([authorId])
+  @@index([subjectId, status])
+  @@index([adId])
+  @@index([status])
+  @@index([deletedAt])
+  @@unique([authorId, subjectId, adId])
+  @@map("reviews")
+}
+
+model ModerationLog {
+  id          String           @id @default(cuid())
+  adId        String           @map("ad_id")
+  moderatorId String?          @map("moderator_id")
+  action      ModerationAction
+  statusFrom  AdStatus?        @map("status_from")
+  statusTo    AdStatus?        @map("status_to")
+  reason      String?
+  comment     String?
+  metadataJson String?         @map("metadata_json")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  ad          Ad               @relation(fields: [adId], references: [id], onDelete: Cascade)
+  moderator   User?            @relation("ModerationLogModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([adId, createdAt])
+  @@index([moderatorId])
+  @@index([action])
+  @@index([statusTo])
+  @@index([createdAt])
+  @@map("moderation_logs")
+}
+
+model ChannelPublishLog {
+  id             String               @id @default(cuid())
+  adId           String               @map("ad_id")
+  channelId      String?              @map("channel_id")
+  channelUrl     String?              @map("channel_url")
+  maxChatId      String?              @map("max_chat_id")
+  maxMessageId   String?              @map("max_message_id")
+  maxMessageUrl  String?              @map("max_message_url")
+  status         ChannelPublishStatus @default(PENDING)
+  attempt        Int                  @default(1)
+  errorCode      String?              @map("error_code")
+  errorMessage   String?              @map("error_message")
+  payloadJson    String?              @map("payload_json")
+  publishedText  String?              @map("published_text")
+  scheduledAt    DateTime?            @map("scheduled_at")
+  publishedAt    DateTime?            @map("published_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  ad             Ad                   @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, createdAt])
+  @@index([status])
+  @@index([channelId])
+  @@index([maxChatId])
+  @@index([publishedAt])
+  @@map("channel_publish_logs")
+}
