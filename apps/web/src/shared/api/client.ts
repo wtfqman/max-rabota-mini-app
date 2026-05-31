@@ -8,6 +8,7 @@ import type {
   CreateVacancyResponse,
   UploadedPhoto
 } from '../../features/vacancies/create-vacancy.types.js';
+import type { UploadMediaMimeType } from '../../features/uploads/upload-flow.js';
 import type {
   CreateResumePayload,
   CreateResumeResponse
@@ -28,14 +29,18 @@ import type {
 } from '../../features/vacancies/vacancy.types.js';
 import type {
   FavoriteItem,
+  AdLifecycleActionResponse,
   ListMeta,
   ModerationActionResponse,
+  ModerationQueueQuery,
   MyAdsQuery,
   OwnedAdCard,
   PublicAdDetail,
   ReviewItem,
+  TeamUser,
   UserProfilePayload
 } from '../../features/ads/ad.types.js';
+import type { PublicationSettings } from '../../features/ads/publication-settings.js';
 
 export interface ApiEnvelope<T, TMeta = Record<string, unknown>> {
   data: T;
@@ -50,6 +55,16 @@ export const apiClient = {
       method: 'PATCH',
       body: JSON.stringify(payload)
     }),
+  listTeamUsers: (query: { q?: string; role?: 'user' | 'moderator' | 'admin' }) =>
+    apiRequest<ApiEnvelope<TeamUser[]>>(`/users/team${toQueryString(query)}`),
+  updateTeamUserRole: (userId: string, role: 'user' | 'moderator' | 'admin') =>
+    apiRequest<ApiEnvelope<{ id: string; role: 'user' | 'moderator' | 'admin'; updatedAt: string }>>(
+      `/users/${encodeURIComponent(userId)}/role`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ role })
+      }
+    ),
   verifyMaxLaunch: (payload: VerifyMaxLaunchRequest) =>
     apiRequest<ApiEnvelope<VerifyMaxLaunchResponse>>('/auth/max/verify', {
       method: 'POST',
@@ -62,6 +77,8 @@ export const apiClient = {
     }),
   listVacancies: (query: VacancyListQuery) =>
     apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/vacancies${toQueryString(query)}`),
+  listAds: (query: VacancyListQuery) =>
+    apiRequest<ApiEnvelope<PublicAdCard[], VacancyListMeta>>(`/ads${toQueryString(query)}`),
   getVacancyDetails: (adId: string) =>
     apiRequest<ApiEnvelope<PublicVacancyDetail>>(`/vacancies/${encodeURIComponent(adId)}`),
   listResumes: (query: VacancyListQuery) =>
@@ -84,14 +101,35 @@ export const apiClient = {
     apiRequest<ApiEnvelope<PublicAdDetail>>(`/ads/${encodeURIComponent(adId)}`),
   listMyAds: (query: MyAdsQuery) =>
     apiRequest<ApiEnvelope<OwnedAdCard[], ListMeta>>(`/ads/my${toQueryString(query)}`),
-  updateMyAd: (adId: string, payload: { title?: string; description?: string | null; city?: string | null; districtText?: string | null; categoryText?: string | null }) =>
+  updateMyAd: (adId: string, payload: { title?: string; description?: string | null; city?: string | null; districtText?: string | null; categoryText?: string | null; desiredPosition?: string | null }) =>
     apiRequest<ApiEnvelope<PublicAdDetail>>(`/ads/${encodeURIComponent(adId)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
     }),
+  updatePublicationSettings: (
+    adId: string,
+    payload: Pick<PublicationSettings, 'autoRepeat' | 'repeatPeriod' | 'activePeriod' | 'remindBeforeEnd'>
+  ) =>
+    apiRequest<ApiEnvelope<{ ad: PublicAdDetail; publicationSettings: PublicationSettings | null }>>(
+      `/ads/${encodeURIComponent(adId)}/publication-settings`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      }
+    ),
   hideMyAd: (adId: string) =>
-    apiRequest<ApiEnvelope<PublicAdDetail>>(`/ads/${encodeURIComponent(adId)}/hide`, {
+    apiRequest<ApiEnvelope<AdLifecycleActionResponse>>(`/ads/${encodeURIComponent(adId)}/hide`, {
       method: 'POST',
+      body: JSON.stringify({})
+    }),
+  archiveMyAd: (adId: string) =>
+    apiRequest<ApiEnvelope<AdLifecycleActionResponse>>(`/ads/${encodeURIComponent(adId)}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    }),
+  deleteMyAd: (adId: string) =>
+    apiRequest<ApiEnvelope<AdLifecycleActionResponse>>(`/ads/${encodeURIComponent(adId)}`, {
+      method: 'DELETE',
       body: JSON.stringify({})
     }),
   resubmitMyAd: (adId: string) =>
@@ -112,7 +150,7 @@ export const apiClient = {
   listMyReviews: () => apiRequest<ApiEnvelope<ReviewItem[]>>('/reviews/me'),
   listUserReviews: (userId: string) =>
     apiRequest<ApiEnvelope<ReviewItem[]>>(`/reviews/users/${encodeURIComponent(userId)}`),
-  createReview: (userId: string, payload: { rating?: number; text?: string; adId?: string }) =>
+  createReview: (userId: string, payload: { rating?: number; text?: string; adId: string }) =>
     apiRequest<ApiEnvelope<{ id: string; subjectId: string; rating: number; text: string | null; createdAt: string }>>(
       `/reviews/users/${encodeURIComponent(userId)}`,
       {
@@ -120,7 +158,7 @@ export const apiClient = {
         body: JSON.stringify(payload)
       }
     ),
-  listModerationQueue: (query: MyAdsQuery) =>
+  listModerationQueue: (query: ModerationQueueQuery) =>
     apiRequest<ApiEnvelope<PublicAdDetail[], ListMeta>>(`/moderation/queue${toQueryString(query)}`),
   getModerationPreview: (adId: string) =>
     apiRequest<ApiEnvelope<PublicAdDetail>>(`/moderation/ads/${encodeURIComponent(adId)}`),
@@ -139,12 +177,37 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ reason })
     }),
+  unpublishModerationAd: (adId: string, reason?: string) =>
+    apiRequest<ApiEnvelope<ModerationActionResponse>>(`/moderation/ads/${encodeURIComponent(adId)}/unpublish`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    }),
+  archiveModerationAd: (adId: string, reason?: string) =>
+    apiRequest<ApiEnvelope<ModerationActionResponse>>(`/moderation/ads/${encodeURIComponent(adId)}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ reason })
+    }),
+  deleteModerationAd: (adId: string, reason?: string) =>
+    apiRequest<ApiEnvelope<ModerationActionResponse>>(`/moderation/ads/${encodeURIComponent(adId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason })
+    }),
+  removeModerationAdFromChannel: (adId: string) =>
+    apiRequest<ApiEnvelope<ModerationActionResponse>>(`/moderation/ads/${encodeURIComponent(adId)}/remove-channel`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    }),
   listCategorySuggestions: (q?: string) =>
     apiRequest<ApiEnvelope<Array<{ value: string; aliases: string[] }>>>(`/references/categories${toQueryString({ q })}`),
   listDistrictSuggestions: (q?: string) =>
     apiRequest<ApiEnvelope<Array<{ value: string; aliases: string[] }>>>(`/references/districts${toQueryString({ q })}`),
-  uploadPhoto: (payload: { fileName: string; mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; dataUrl: string; altText?: string }) =>
+  uploadPhoto: (payload: { fileName: string; mimeType: UploadMediaMimeType; dataUrl: string; altText?: string }) =>
     apiRequest<ApiEnvelope<UploadedPhoto>>('/uploads/photos', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  uploadMedia: (payload: { fileName: string; mimeType: UploadMediaMimeType; dataUrl: string; altText?: string }) =>
+    apiRequest<ApiEnvelope<UploadedPhoto>>('/uploads/media', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
@@ -175,10 +238,10 @@ export const apiClient = {
     })
 };
 
-function toQueryString(query: VacancyListQuery | Record<string, unknown>): string {
+function toQueryString(query: object): string {
   const params = new URLSearchParams();
 
-  Object.entries(query).forEach(([key, value]) => {
+  Object.entries(query as Record<string, unknown>).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
       params.set(key, String(value));
     }
