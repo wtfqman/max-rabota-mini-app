@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
@@ -17,8 +18,16 @@ export function FavoritesPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const accessToken = useAppStore((state) => state.accessToken);
 
   useEffect(() => {
+    if (!accessToken) {
+      setItems([]);
+      setError('Нужно открыть mini app через MAX, чтобы увидеть избранное.');
+      setStatus('error');
+      return;
+    }
+
     let active = true;
     setStatus('loading');
     setError(null);
@@ -43,7 +52,7 @@ export function FavoritesPage() {
     return () => {
       active = false;
     };
-  }, [reloadKey]);
+  }, [accessToken, reloadKey]);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -60,6 +69,10 @@ export function FavoritesPage() {
   }, [items, query]);
 
   const remove = async (adId: string) => {
+    if (!accessToken) {
+      return;
+    }
+
     await apiClient.removeFavorite(adId);
     setItems((current) => current.filter((item) => item.ad.id !== adId));
   };
@@ -67,8 +80,8 @@ export function FavoritesPage() {
   return (
     <AppPage>
       <div className="space-y-2 app-fade-up">
-        <h1 className="text-3xl font-black text-text-primary">Избранное</h1>
-        <p className="text-base leading-6 text-text-secondary">
+        <h1 className="text-2xl font-black text-text-primary">Избранное</h1>
+        <p className="text-sm leading-5 text-text-secondary">
           Сохраняйте вакансии и объявления, чтобы быстро вернуться к ним позже.
         </p>
       </div>
@@ -110,15 +123,17 @@ export function FavoritesPage() {
       ) : null}
 
       {status === 'ready' && filtered.length > 0 ? (
-        <section className="space-y-3">
+        <section className="grid grid-cols-2 gap-2.5">
           {filtered.map((item) => (
             <AdCard
               key={item.favoriteId}
+              variant="grid"
               to={getAdUrl(item.ad.type, item.ad.id)}
               typeLabel={typeLabel(item.ad.type)}
               title={item.ad.title}
               subtitle={item.ad.subtitle}
               coverImageUrl={item.ad.coverPhoto?.previewUrl ?? item.ad.coverPhoto?.url}
+              coverMimeType={item.ad.coverPhoto?.mimeType}
               location={item.ad.locationShort}
               price={item.ad.shortSalary ?? undefined}
               category={item.ad.category}

@@ -1,4 +1,4 @@
-import type { AuthPlatform } from '../../features/auth/auth.types.js';
+﻿import type { AuthPlatform } from '../../features/auth/auth.types.js';
 
 export interface MaxWebAppUser {
   id?: number;
@@ -87,7 +87,7 @@ function getLocationCandidates(rawValue: string): string[] {
   }
 
   const params = new URLSearchParams(trimmed);
-  for (const key of ['tgWebAppData', 'webAppData', 'initData', 'appData', 'maxWebAppData']) {
+  for (const key of ['WebAppData', 'webAppData', 'maxWebAppData', 'tgWebAppData', 'initData', 'appData']) {
     const value = params.get(key);
     if (value) {
       candidates.push(value);

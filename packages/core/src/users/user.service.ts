@@ -1,6 +1,6 @@
 import type { User } from '@rabst24/db';
 import type { MaxUser } from '@rabst24/max-api';
-import { toStringId } from '@rabst24/shared';
+import { AppError, toStringId } from '@rabst24/shared';
 import type { UserRepository } from './user.repository.js';
 
 export class UserService {
@@ -19,5 +19,15 @@ export class UserService {
       displayName,
       locale: locale ?? null
     });
+  }
+
+  async getById(userId: string): Promise<User> {
+    const user = await this.userRepository.findById(userId);
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    return user;
   }
 }

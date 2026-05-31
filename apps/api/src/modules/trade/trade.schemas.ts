@@ -10,7 +10,7 @@ export const tradeListQuerySchema = adListQuerySchema.omit({
 export const createTradeAdSchema = z.object({
   title: z.string().trim().min(3).max(180),
   categoryText: z.string().trim().max(120).optional(),
-  description: z.string().trim().min(10).max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   priceAmount: z.coerce.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
@@ -38,7 +38,7 @@ export const createTradeAdSchema = z.object({
         altText: z.string().trim().max(255).optional()
       })
     )
-    .max(8)
+    .max(9)
     .default([])
 });
 

@@ -11,7 +11,7 @@ export const createEquipmentSchema = z.object({
   title: z.string().trim().min(3).max(180),
   categoryText: z.string().trim().min(2).max(120),
   equipmentGroupText: z.string().trim().max(120).optional(),
-  description: z.string().trim().min(20).max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   contacts: z
@@ -38,7 +38,7 @@ export const createEquipmentSchema = z.object({
         altText: z.string().trim().max(255).optional()
       })
     )
-    .max(8)
+    .max(9)
     .default([])
 });
 

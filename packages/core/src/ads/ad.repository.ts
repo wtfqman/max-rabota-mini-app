@@ -77,11 +77,78 @@ export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
   }
 });
 
+const adDuplicateCandidateSelect = Prisma.validator<Prisma.AdSelect>()({
+  id: true,
+  type: true,
+  status: true,
+  title: true,
+  description: true,
+  city: true,
+  districtText: true,
+  categoryText: true,
+  priceAmount: true,
+  metadataJson: true,
+  createdAt: true,
+  deletedAt: true,
+  vacancyDetails: {
+    select: {
+      companyName: true,
+      position: true,
+      salaryFrom: true,
+      salaryTo: true,
+      salaryPeriod: true,
+      schedule: true,
+      experience: true
+    }
+  },
+  resumeDetails: {
+    select: {
+      desiredPosition: true,
+      expectedSalary: true
+    }
+  },
+  equipmentDetails: {
+    select: {
+      categoryText: true,
+      brand: true,
+      model: true
+    }
+  },
+  requirements: {
+    select: {
+      text: true
+    },
+    orderBy: {
+      sortOrder: 'asc'
+    }
+  },
+  responsibilities: {
+    select: {
+      text: true
+    },
+    orderBy: {
+      sortOrder: 'asc'
+    }
+  },
+  benefits: {
+    select: {
+      text: true
+    },
+    orderBy: {
+      sortOrder: 'asc'
+    }
+  }
+});
+
 export type PublicAdRecord = Prisma.AdGetPayload<{
   include: typeof adWithDetailsInclude;
 }>;
 
 export type AdWithDetailsRecord = PublicAdRecord;
+
+export type DuplicateCandidateRecord = Prisma.AdGetPayload<{
+  select: typeof adDuplicateCandidateSelect;
+}>;
 
 export interface PublicAdListResult {
   items: PublicAdRecord[];
@@ -114,6 +181,53 @@ export class AdRepository {
       data: {
         ...data,
         status: AdStatus.PENDING_MODERATION
+      }
+    });
+  }
+
+  async listRecentDuplicateCandidates(
+    ownerId: string,
+    type: AdType,
+    createdSince: Date
+  ): Promise<DuplicateCandidateRecord[]> {
+    return this.db.ad.findMany({
+      where: {
+        ownerId,
+        type,
+        status: {
+          not: AdStatus.DRAFT
+        },
+        createdAt: {
+          gte: createdSince
+        }
+      },
+      select: adDuplicateCandidateSelect,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 60
+    });
+  }
+
+  async updatePhotoMaxMediaToken(
+    photoId: string,
+    data: {
+      token: string;
+      mediaType: string;
+      strategy: string;
+      payload?: Prisma.InputJsonValue;
+    }
+  ) {
+    return this.db.adPhoto.update({
+      where: {
+        id: photoId
+      },
+      data: {
+        maxMediaToken: data.token,
+        maxMediaType: data.mediaType,
+        maxMediaStrategy: data.strategy,
+        maxMediaPayloadJson: data.payload ? JSON.stringify(data.payload) : undefined,
+        maxMediaUploadedAt: new Date()
       }
     });
   }
@@ -175,7 +289,17 @@ export class AdRepository {
   async findWithDetailsById(adId: string): Promise<AdWithDetailsRecord | null> {
     return this.db.ad.findFirst({
       where: {
+        id: adId
+      },
+      include: adWithDetailsInclude
+    });
+  }
+
+  async findOwnedWithDetailsById(ownerId: string, adId: string): Promise<AdWithDetailsRecord | null> {
+    return this.db.ad.findFirst({
+      where: {
         id: adId,
+        ownerId,
         deletedAt: null
       },
       include: adWithDetailsInclude
@@ -253,6 +377,7 @@ export class AdRepository {
       city?: string | null;
       districtText?: string | null;
       categoryText?: string | null;
+      desiredPosition?: string | null;
     }
   ): Promise<AdWithDetailsRecord | null> {
     const existing = await this.db.ad.findFirst({
@@ -262,7 +387,8 @@ export class AdRepository {
         deletedAt: null
       },
       select: {
-        id: true
+        id: true,
+        type: true
       }
     });
 
@@ -279,7 +405,20 @@ export class AdRepository {
         description: data.description,
         city: data.city,
         districtText: canonicalizeDistrict(data.districtText),
-        categoryText: canonicalizeCategory(data.categoryText)
+        categoryText: canonicalizeCategory(data.categoryText),
+        resumeDetails:
+          existing.type === AdType.RESUME && data.desiredPosition !== undefined
+            ? {
+                upsert: {
+                  create: {
+                    desiredPosition: data.desiredPosition
+                  },
+                  update: {
+                    desiredPosition: data.desiredPosition
+                  }
+                }
+              }
+            : undefined
       },
       include: adWithDetailsInclude
     });
@@ -323,6 +462,56 @@ export class AdRepository {
     });
   }
 
+  async updateOwnedMetadataJson(ownerId: string, adId: string, metadataJson: string): Promise<AdWithDetailsRecord | null> {
+    const existing = await this.db.ad.findFirst({
+      where: {
+        id: adId,
+        ownerId,
+        deletedAt: null
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    return this.db.ad.update({
+      where: {
+        id: adId
+      },
+      data: {
+        metadataJson
+      },
+      include: adWithDetailsInclude
+    });
+  }
+
+  async softDelete(adId: string): Promise<AdWithDetailsRecord | null> {
+    const existing = await this.db.ad.findFirst({
+      where: {
+        id: adId
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    return this.db.ad.update({
+      where: {
+        id: adId
+      },
+      data: this.buildStatusUpdateData(AdStatus.DELETED),
+      include: adWithDetailsInclude
+    });
+  }
+
   private buildPublicWhere(query: AdListQueryDto, forcedType?: AdTypeCode): Prisma.AdWhereInput {
     const filters: Prisma.AdWhereInput[] = [];
 
@@ -331,30 +520,17 @@ export class AdRepository {
     }
 
     if (query.city) {
-      filters.push({
-        city: this.contains(query.city)
-      });
+      filters.push(this.buildLocationVariantWhere([query.city]));
     }
 
     const districtVariants = buildTaxonomySearchVariants(query.district, 'district');
     if (districtVariants.length) {
-      filters.push(this.buildFieldVariantWhere('districtText', districtVariants));
+      filters.push(this.buildLocationVariantWhere(districtVariants));
     }
 
     const categoryVariants = buildTaxonomySearchVariants(query.category, 'category');
     if (categoryVariants.length) {
-      filters.push({
-        OR: [
-          this.buildFieldVariantWhere('categoryText', categoryVariants),
-          ...categoryVariants.map((variant) => ({
-            equipmentDetails: {
-              is: {
-                categoryText: this.contains(variant)
-              }
-            }
-          }))
-        ]
-      });
+      filters.push(this.buildCategoryVariantWhere(categoryVariants));
     }
 
     if (query.schedule || query.experience) {
@@ -366,6 +542,11 @@ export class AdRepository {
           }
         }
       });
+    }
+
+    const priceRangeWhere = this.buildPriceRangeWhere(query.priceFrom, query.priceTo);
+    if (priceRangeWhere) {
+      filters.push(priceRangeWhere);
     }
 
     return {
@@ -382,6 +563,7 @@ export class AdRepository {
       deletedAt: null,
       hiddenAt: null,
       archivedAt: null,
+      isTest: false,
       type: type ? this.mapAdType(type) : undefined
     };
   }
@@ -393,9 +575,25 @@ export class AdRepository {
       filters.push(this.buildTextSearchWhere(query.q));
     }
 
+    if (query.status === 'test') {
+      return {
+        deletedAt: null,
+        type: query.type ? this.mapAdType(query.type) : undefined,
+        OR: [
+          {
+            isTest: true
+          },
+          ...this.buildTestAdWhere()
+        ],
+        AND: filters.length > 0 ? filters : undefined
+      };
+    }
+
+    const status = this.mapStatus(query.status) ?? AdStatus.PENDING_MODERATION;
+
     return {
-      status: this.mapStatus(query.status) ?? AdStatus.PENDING_MODERATION,
-      deletedAt: null,
+      status,
+      deletedAt: status === AdStatus.DELETED ? { not: null } : null,
       type: query.type ? this.mapAdType(query.type) : undefined,
       AND: filters.length > 0 ? filters : undefined
     };
@@ -408,70 +606,185 @@ export class AdRepository {
       filters.push(this.buildTextSearchWhere(query.q));
     }
 
+    const status = this.mapStatus(query.status);
+
     return {
       ownerId,
-      deletedAt: null,
+      deletedAt: status === AdStatus.DELETED ? { not: null } : null,
       type: query.type ? this.mapAdType(query.type) : undefined,
-      status: this.mapStatus(query.status),
+      status,
       AND: filters.length > 0 ? filters : undefined
     };
   }
 
   private buildTextSearchWhere(query: string): Prisma.AdWhereInput {
-    const normalizedQuery = normalizeSearchText(query) ?? query;
-    const textFilter = this.contains(normalizedQuery);
+    const variants = this.buildSearchVariants(query);
+
+    return {
+      OR: variants.flatMap((variant) => this.buildTextSearchVariantWhere(variant))
+    };
+  }
+
+  private buildTextSearchVariantWhere(query: string): Prisma.AdWhereInput[] {
+    const textFilter = this.contains(query);
+
+    return [
+      {
+        title: textFilter
+      },
+      {
+        description: textFilter
+      },
+      {
+        city: textFilter
+      },
+      {
+        districtText: textFilter
+      },
+      {
+        categoryText: textFilter
+      },
+      {
+        vacancyDetails: {
+          is: {
+            OR: [
+              {
+                companyName: textFilter
+              },
+              {
+                position: textFilter
+              },
+              {
+                schedule: textFilter
+              },
+              {
+                experience: textFilter
+              }
+            ]
+          }
+        }
+      },
+      {
+        resumeDetails: {
+          is: {
+            OR: [
+              {
+                desiredPosition: textFilter
+              },
+              {
+                education: textFilter
+              },
+              {
+                availability: textFilter
+              }
+            ]
+          }
+        }
+      },
+      {
+        equipmentDetails: {
+          is: {
+            OR: [
+              {
+                categoryText: textFilter
+              },
+              {
+                brand: textFilter
+              },
+              {
+                model: textFilter
+              }
+            ]
+          }
+        }
+      }
+    ];
+  }
+
+  private buildSearchVariants(value: string): string[] {
+    const variants = new Set<string>();
+    const raw = value.trim();
+    const normalized = normalizeSearchText(value);
+    const taxonomyVariants = [
+      ...buildTaxonomySearchVariants(value, 'category'),
+      ...buildTaxonomySearchVariants(value, 'district')
+    ];
+
+    for (const variant of [raw, normalized, ...taxonomyVariants]) {
+      this.addCaseVariants(variants, variant);
+    }
+
+    return [...variants];
+  }
+
+  private expandSearchVariants(values: string[]): string[] {
+    const variants = new Set<string>();
+
+    values.forEach((value) => {
+      this.buildSearchVariants(value).forEach((variant) => variants.add(variant));
+    });
+
+    return [...variants];
+  }
+
+  private addCaseVariants(variants: Set<string>, value: string | null | undefined): void {
+    const trimmed = value?.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    variants.add(trimmed);
+
+    const lower = trimmed.toLocaleLowerCase('ru-RU');
+    const upper = trimmed.toLocaleUpperCase('ru-RU');
+
+    variants.add(lower);
+    variants.add(upper);
+    variants.add(this.toTitleCase(lower));
+  }
+
+  private toTitleCase(value: string): string {
+    return value.replace(/(^|[\s/-])(\p{L})/gu, (_match, prefix: string, letter: string) =>
+      `${prefix}${letter.toLocaleUpperCase('ru-RU')}`
+    );
+  }
+
+  private buildTestAdWhere(): Prisma.AdWhereInput[] {
+    const variants = ['test', 'тест', 'тестовое', 'тестовая', 'проверка'];
+
+    return variants.flatMap((variant) => [
+      {
+        title: this.contains(variant)
+      },
+      {
+        description: this.contains(variant)
+      },
+      {
+        categoryText: this.contains(variant)
+      }
+    ]);
+  }
+
+  private buildPriceRangeWhere(priceFrom?: number, priceTo?: number): Prisma.AdWhereInput | null {
+    const min = typeof priceFrom === 'number' && Number.isFinite(priceFrom) ? priceFrom : undefined;
+    const max = typeof priceTo === 'number' && Number.isFinite(priceTo) ? priceTo : undefined;
+
+    if (min === undefined && max === undefined) {
+      return null;
+    }
+
+    const range = this.buildNumberRangeFilter(min, max);
 
     return {
       OR: [
         {
-          title: textFilter
-        },
-        {
-          description: textFilter
-        },
-        {
-          city: textFilter
-        },
-        {
-          districtText: textFilter
-        },
-        {
-          categoryText: textFilter
-        },
-        {
-          vacancyDetails: {
-            is: {
-              OR: [
-                {
-                  companyName: textFilter
-                },
-                {
-                  position: textFilter
-                },
-                {
-                  schedule: textFilter
-                },
-                {
-                  experience: textFilter
-                }
-              ]
-            }
-          }
+          priceAmount: range
         },
         {
           resumeDetails: {
             is: {
-              OR: [
-                {
-                  desiredPosition: textFilter
-                },
-                {
-                  education: textFilter
-                },
-                {
-                  availability: textFilter
-                }
-              ]
+              expectedSalary: range
             }
           }
         },
@@ -480,34 +793,138 @@ export class AdRepository {
             is: {
               OR: [
                 {
-                  categoryText: textFilter
+                  rentalPrice: range
                 },
                 {
-                  brand: textFilter
-                },
-                {
-                  model: textFilter
+                  salePrice: range
                 }
               ]
             }
+          }
+        },
+        {
+          vacancyDetails: {
+            is: this.buildVacancySalaryRangeWhere(min, max)
           }
         }
       ]
     };
   }
 
-  private contains(value: string) {
+  private buildNumberRangeFilter(min?: number, max?: number) {
     return {
-      contains: value,
-      mode: 'insensitive' as const
+      gte: min,
+      lte: max
     };
   }
 
-  private buildFieldVariantWhere(field: 'districtText' | 'categoryText', variants: string[]): Prisma.AdWhereInput {
+  private buildVacancySalaryRangeWhere(min?: number, max?: number): Prisma.VacancyDetailsWhereInput {
+    const filters: Prisma.VacancyDetailsWhereInput[] = [];
+
+    if (min !== undefined) {
+      filters.push({
+        OR: [
+          {
+            salaryFrom: {
+              gte: min
+            }
+          },
+          {
+            salaryTo: {
+              gte: min
+            }
+          }
+        ]
+      });
+    }
+
+    if (max !== undefined) {
+      filters.push({
+        OR: [
+          {
+            salaryFrom: {
+              lte: max
+            }
+          },
+          {
+            salaryTo: {
+              lte: max
+            }
+          }
+        ]
+      });
+    }
+
+    return filters.length > 0 ? { AND: filters } : {};
+  }
+
+  private contains(value: string) {
     return {
-      OR: variants.map((variant) => ({
-        [field]: this.contains(variant)
-      }))
+      contains: value
+    };
+  }
+
+  private buildLocationVariantWhere(variants: string[]): Prisma.AdWhereInput {
+    const searchVariants = this.expandSearchVariants(variants);
+
+    return {
+      OR: searchVariants.flatMap((variant) => [
+        {
+          city: this.contains(variant)
+        },
+        {
+          districtText: this.contains(variant)
+        },
+        {
+          metadataJson: this.contains(variant)
+        }
+      ])
+    };
+  }
+
+  private buildCategoryVariantWhere(variants: string[]): Prisma.AdWhereInput {
+    const searchVariants = this.expandSearchVariants(variants);
+
+    return {
+      OR: searchVariants.flatMap((variant) => [
+        {
+          categoryText: this.contains(variant)
+        },
+        {
+          title: this.contains(variant)
+        },
+        {
+          equipmentDetails: {
+            is: {
+              OR: [
+                {
+                  categoryText: this.contains(variant)
+                },
+                {
+                  brand: this.contains(variant)
+                },
+                {
+                  model: this.contains(variant)
+                }
+              ]
+            }
+          }
+        },
+        {
+          vacancyDetails: {
+            is: {
+              position: this.contains(variant)
+            }
+          }
+        },
+        {
+          resumeDetails: {
+            is: {
+              desiredPosition: this.contains(variant)
+            }
+          }
+        }
+      ])
     };
   }
 
@@ -570,17 +987,24 @@ export class AdRepository {
       return AdStatus.ARCHIVED;
     }
 
+    if (normalized === 'deleted') {
+      return AdStatus.DELETED;
+    }
+
     return undefined;
   }
 
   private buildStatusUpdateData(status: AdStatus): Prisma.AdUpdateInput {
+    const now = new Date();
+
     return {
       status,
       moderatedAt:
-        status === AdStatus.APPROVED || status === AdStatus.REJECTED ? new Date() : undefined,
-      publishedAt: status === AdStatus.PUBLISHED ? new Date() : undefined,
-      hiddenAt: status === AdStatus.HIDDEN ? new Date() : undefined,
-      archivedAt: status === AdStatus.ARCHIVED ? new Date() : undefined
+        status === AdStatus.APPROVED || status === AdStatus.REJECTED ? now : undefined,
+      publishedAt: status === AdStatus.PUBLISHED ? now : undefined,
+      hiddenAt: status === AdStatus.HIDDEN ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      archivedAt: status === AdStatus.ARCHIVED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined
     };
   }
 }

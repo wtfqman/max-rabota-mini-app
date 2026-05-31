@@ -6,7 +6,7 @@ export { contactTypeOptions };
 export const createResumePayloadSchema = z.object({
   name: z.string().trim().min(2, 'Укажите имя').max(180),
   profession: z.string().trim().min(2, 'Укажите профессию').max(180),
-  description: z.string().trim().min(20, 'Добавьте описание от 20 символов').max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   experienceText: z.string().trim().min(2, 'Опишите опыт').max(1200),
   expectedSalary: z.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
@@ -34,7 +34,7 @@ export const createResumePayloadSchema = z.object({
         altText: z.string().optional()
       })
     )
-    .max(1)
+    .max(9)
 });
 
 export type CreateResumePayload = z.infer<typeof createResumePayloadSchema>;

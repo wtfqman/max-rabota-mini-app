@@ -1,8 +1,17 @@
 import { AdStatus, AdType, type Ad, type Prisma } from '@rabst24/db';
 import { AppError, type AdListQueryDto, type AdTypeCode, type CreateAdDto } from '@rabst24/shared';
-import type { ModerationQueueQuery, OwnedAdListQuery, AdRepository } from './ad.repository.js';
+import type { DuplicateCandidateRecord, ModerationQueueQuery, OwnedAdListQuery, AdRepository } from './ad.repository.js';
+import { mergeAdPublicationSettings, type AdPublicationSettings } from './ad-publication-settings.js';
 
 export class AdService {
+  private static readonly maxPhotos = 8;
+  private static readonly maxVideos = 1;
+  private static readonly duplicateWindowMs = 24 * 60 * 60 * 1000;
+  private static readonly duplicateFullSimilarityThreshold = 0.86;
+  private static readonly duplicateTitleSimilarityThreshold = 0.75;
+  private static readonly duplicateTextSimilarityThreshold = 0.72;
+  private static readonly duplicateMinSoftTokens = 6;
+
   constructor(private readonly adRepository: AdRepository) {}
 
   async listPublicAds(query: AdListQueryDto, forcedType?: AdTypeCode) {
@@ -31,6 +40,16 @@ export class AdService {
     return ad;
   }
 
+  async getOwnedAdDetails(ownerId: string, adId: string) {
+    const ad = await this.adRepository.findOwnedWithDetailsById(ownerId, adId);
+
+    if (!ad) {
+      throw new AppError('Ad not found', 404, { adId });
+    }
+
+    return ad;
+  }
+
   async listModerationQueue(query: ModerationQueueQuery) {
     return this.adRepository.listForModeration(query);
   }
@@ -48,6 +67,7 @@ export class AdService {
       city?: string | null;
       districtText?: string | null;
       categoryText?: string | null;
+      desiredPosition?: string | null;
     }
   ) {
     const ad = await this.adRepository.updateOwned(ownerId, adId, dto);
@@ -59,8 +79,44 @@ export class AdService {
     return ad;
   }
 
+  async updateOwnerPublicationSettings(
+    ownerId: string,
+    adId: string,
+    settings: Partial<AdPublicationSettings>
+  ) {
+    const existing = await this.getOwnedAdDetails(ownerId, adId);
+    const metadataJson = mergeAdPublicationSettings(existing.metadataJson, settings);
+    const ad = await this.adRepository.updateOwnedMetadataJson(ownerId, adId, metadataJson);
+
+    if (!ad) {
+      throw new AppError('Ad not found', 404, { adId });
+    }
+
+    return ad;
+  }
+
   async hideOwnerAd(ownerId: string, adId: string) {
     const ad = await this.adRepository.updateOwnedStatus(ownerId, adId, AdStatus.HIDDEN);
+
+    if (!ad) {
+      throw new AppError('Ad not found', 404, { adId });
+    }
+
+    return ad;
+  }
+
+  async archiveOwnerAd(ownerId: string, adId: string) {
+    const ad = await this.adRepository.updateOwnedStatus(ownerId, adId, AdStatus.ARCHIVED);
+
+    if (!ad) {
+      throw new AppError('Ad not found', 404, { adId });
+    }
+
+    return ad;
+  }
+
+  async deleteOwnerAd(ownerId: string, adId: string) {
+    const ad = await this.adRepository.updateOwnedStatus(ownerId, adId, AdStatus.DELETED);
 
     if (!ad) {
       throw new AppError('Ad not found', 404, { adId });
@@ -85,13 +141,18 @@ export class AdService {
   }
 
   async createAdForModeration(ownerId: string, dto: CreateAdDto): Promise<Ad> {
+    const media = this.validateMediaSet(dto.photos);
+    const adType = this.mapAdType(dto.type);
+
+    await this.ensureNotRecentDuplicate(ownerId, adType, dto);
+
     const data: Prisma.AdCreateInput = {
       owner: {
         connect: {
           id: ownerId
         }
       },
-      type: this.mapAdType(dto.type),
+      type: adType,
       title: dto.title,
       description: dto.description,
       city: dto.city,
@@ -99,8 +160,9 @@ export class AdService {
       categoryText: dto.categoryText,
       priceAmount: dto.priceAmount,
       metadataJson: dto.metadata ? JSON.stringify(dto.metadata) : undefined,
+      isTest: this.isTestAd(dto),
       photos: {
-        create: dto.photos.map((photo, index) => ({
+        create: media.map((photo, index) => ({
           storageKey: photo.storageKey,
           url: photo.url,
           previewUrl: photo.previewUrl,
@@ -172,6 +234,292 @@ export class AdService {
     return this.adRepository.createPending(data);
   }
 
+  private async ensureNotRecentDuplicate(ownerId: string, adType: AdType, dto: CreateAdDto): Promise<void> {
+    const createdSince = new Date(Date.now() - AdService.duplicateWindowMs);
+    const candidateAds = await this.adRepository.listRecentDuplicateCandidates(ownerId, adType, createdSince);
+    const next = this.buildDuplicateComparable(dto, adType);
+
+    for (const candidate of candidateAds) {
+      const current = this.buildCandidateComparable(candidate);
+      const match = this.getDuplicateMatch(next, current);
+
+      if (!match.isDuplicate) {
+        continue;
+      }
+
+      throw new AppError(
+        'Похожее объявление уже отправлялось сегодня. Обновите существующее объявление или попробуйте завтра.',
+        409,
+        {
+          code: 'DUPLICATE_AD',
+          duplicateAdId: candidate.id,
+          duplicateCreatedAt: candidate.createdAt.toISOString(),
+          duplicateStatus: candidate.status.toLowerCase(),
+          matchReason: match.reason,
+          similarity: match.similarity
+        }
+      );
+    }
+  }
+
+  private getDuplicateMatch(
+    next: DuplicateComparable,
+    current: DuplicateComparable
+  ): { isDuplicate: true; reason: string; similarity: number } | { isDuplicate: false } {
+    if (next.signature && next.signature === current.signature) {
+      return {
+        isDuplicate: true,
+        reason: 'exact',
+        similarity: 1
+      };
+    }
+
+    if (next.tokens.length < AdService.duplicateMinSoftTokens || current.tokens.length < AdService.duplicateMinSoftTokens) {
+      return { isDuplicate: false };
+    }
+
+    if (!this.areRolesCompatible(next.roleTokens, current.roleTokens)) {
+      return { isDuplicate: false };
+    }
+
+    const fullSimilarity = this.tokenDice(next.tokens, current.tokens);
+    const titleSimilarity = this.tokenDice(next.titleTokens, current.titleTokens);
+
+    if (fullSimilarity >= AdService.duplicateFullSimilarityThreshold) {
+      return {
+        isDuplicate: true,
+        reason: 'similar_text',
+        similarity: Number(fullSimilarity.toFixed(3))
+      };
+    }
+
+    if (
+      titleSimilarity >= AdService.duplicateTitleSimilarityThreshold &&
+      fullSimilarity >= AdService.duplicateTextSimilarityThreshold
+    ) {
+      return {
+        isDuplicate: true,
+        reason: 'similar_title_and_text',
+        similarity: Number(fullSimilarity.toFixed(3))
+      };
+    }
+
+    return { isDuplicate: false };
+  }
+
+  private areRolesCompatible(nextTokens: string[], currentTokens: string[]): boolean {
+    if (nextTokens.length === 0 || currentTokens.length === 0) {
+      return true;
+    }
+
+    const next = new Set(nextTokens);
+    const current = new Set(currentTokens);
+    let overlap = 0;
+
+    for (const token of next) {
+      if (current.has(token)) {
+        overlap += 1;
+      }
+    }
+
+    return overlap / Math.min(next.size, current.size) >= 0.25;
+  }
+
+  private buildDuplicateComparable(dto: CreateAdDto, adType: AdType): DuplicateComparable {
+    const metadata = this.stringifyMetadata(dto.metadata);
+    const roleText = this.joinText([
+      dto.title,
+      dto.categoryText,
+      dto.vacancy?.position,
+      dto.resume?.desiredPosition,
+      dto.equipment?.categoryText,
+      dto.equipment?.brand,
+      dto.equipment?.model
+    ]);
+    const priceText = this.joinText([
+      dto.priceAmount,
+      dto.vacancy?.salaryFrom,
+      dto.vacancy?.salaryTo,
+      dto.vacancy?.salaryPeriod,
+      dto.resume?.expectedSalary
+    ]);
+    const fullText = this.joinText([
+      adType,
+      dto.title,
+      dto.description,
+      dto.city,
+      dto.districtText,
+      dto.categoryText,
+      priceText,
+      metadata,
+      dto.requirements,
+      dto.responsibilities,
+      dto.benefits,
+      dto.vacancy?.companyName,
+      dto.vacancy?.position,
+      dto.vacancy?.schedule,
+      dto.vacancy?.experience,
+      dto.resume?.desiredPosition,
+      dto.equipment?.categoryText,
+      dto.equipment?.brand,
+      dto.equipment?.model
+    ]);
+
+    return this.toDuplicateComparable(fullText, dto.title, roleText);
+  }
+
+  private buildCandidateComparable(candidate: DuplicateCandidateRecord): DuplicateComparable {
+    const metadata = this.stringifyMetadata(this.parseMetadata(candidate.metadataJson));
+    const roleText = this.joinText([
+      candidate.title,
+      candidate.categoryText,
+      candidate.vacancyDetails?.position,
+      candidate.resumeDetails?.desiredPosition,
+      candidate.equipmentDetails?.categoryText,
+      candidate.equipmentDetails?.brand,
+      candidate.equipmentDetails?.model
+    ]);
+    const priceText = this.joinText([
+      candidate.priceAmount,
+      candidate.vacancyDetails?.salaryFrom,
+      candidate.vacancyDetails?.salaryTo,
+      candidate.vacancyDetails?.salaryPeriod,
+      candidate.resumeDetails?.expectedSalary
+    ]);
+    const fullText = this.joinText([
+      candidate.type,
+      candidate.title,
+      candidate.description,
+      candidate.city,
+      candidate.districtText,
+      candidate.categoryText,
+      priceText,
+      metadata,
+      candidate.requirements.map((item) => item.text),
+      candidate.responsibilities.map((item) => item.text),
+      candidate.benefits.map((item) => item.text),
+      candidate.vacancyDetails?.companyName,
+      candidate.vacancyDetails?.position,
+      candidate.vacancyDetails?.schedule,
+      candidate.vacancyDetails?.experience,
+      candidate.resumeDetails?.desiredPosition,
+      candidate.equipmentDetails?.categoryText,
+      candidate.equipmentDetails?.brand,
+      candidate.equipmentDetails?.model
+    ]);
+
+    return this.toDuplicateComparable(fullText, candidate.title, roleText);
+  }
+
+  private toDuplicateComparable(fullText: string, title: string, roleText: string): DuplicateComparable {
+    const signature = this.normalizeText(fullText);
+
+    return {
+      signature,
+      tokens: this.tokenize(signature),
+      titleTokens: this.tokenize(this.normalizeText(title)),
+      roleTokens: this.tokenize(this.normalizeText(roleText))
+    };
+  }
+
+  private tokenDice(leftTokens: string[], rightTokens: string[]): number {
+    if (leftTokens.length === 0 || rightTokens.length === 0) {
+      return 0;
+    }
+
+    const left = new Set(leftTokens);
+    const right = new Set(rightTokens);
+    let overlap = 0;
+
+    for (const token of left) {
+      if (right.has(token)) {
+        overlap += 1;
+      }
+    }
+
+    return (2 * overlap) / (left.size + right.size);
+  }
+
+  private tokenize(value: string): string[] {
+    if (!value) {
+      return [];
+    }
+
+    return value
+      .split(' ')
+      .map((token) => token.trim())
+      .filter((token) => token.length > 1 && !duplicateStopWords.has(token));
+  }
+
+  private normalizeText(value: string): string {
+    return value
+      .toLocaleLowerCase('ru-RU')
+      .replace(/ё/g, 'е')
+      .replace(/https?:\/\/\S+/g, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private joinText(values: unknown[]): string {
+    return values.flatMap((value) => this.flattenText(value)).join(' ');
+  }
+
+  private flattenText(value: unknown): string[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+
+    if (Array.isArray(value)) {
+      return value.flatMap((item) => this.flattenText(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => key !== 'publicationSettings')
+        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+        .flatMap(([, entryValue]) => this.flattenText(entryValue));
+    }
+
+    return [String(value)];
+  }
+
+  private stringifyMetadata(metadata: Record<string, unknown> | undefined): string {
+    return this.joinText([metadata ?? {}]);
+  }
+
+  private parseMetadata(metadataJson: string | null): Record<string, unknown> | undefined {
+    if (!metadataJson) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(metadataJson) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private validateMediaSet(media: CreateAdDto['photos']): CreateAdDto['photos'] {
+    const photosCount = media.filter((item) => !this.isVideoMedia(item.mimeType)).length;
+    const videosCount = media.filter((item) => this.isVideoMedia(item.mimeType)).length;
+
+    if (photosCount > AdService.maxPhotos) {
+      throw new AppError(`Можно добавить до ${AdService.maxPhotos} фото. Лишние фото не сохранены.`, 400);
+    }
+
+    if (videosCount > AdService.maxVideos) {
+      throw new AppError('Можно добавить только одно видео к объявлению.', 400);
+    }
+
+    return media.slice(0, AdService.maxPhotos + AdService.maxVideos);
+  }
+
+  private isVideoMedia(mimeType: string | null | undefined): boolean {
+    return Boolean(mimeType?.toLowerCase().startsWith('video/'));
+  }
+
   private mapAdType(type: CreateAdDto['type']) {
     if (type === 'vacancy') {
       return AdType.VACANCY;
@@ -191,4 +539,73 @@ export class AdService {
 
     return AdType.EQUIPMENT;
   }
+
+  private isTestAd(dto: CreateAdDto): boolean {
+    if (dto.metadata && dto.metadata.isTest === true) {
+      return true;
+    }
+
+    return false;
+  }
 }
+
+interface DuplicateComparable {
+  signature: string;
+  tokens: string[];
+  titleTokens: string[];
+  roleTokens: string[];
+}
+
+const duplicateStopWords = new Set([
+  'в',
+  'во',
+  'и',
+  'или',
+  'на',
+  'по',
+  'за',
+  'для',
+  'с',
+  'со',
+  'от',
+  'до',
+  'из',
+  'к',
+  'ко',
+  'у',
+  'о',
+  'об',
+  'без',
+  'при',
+  'это',
+  'как',
+  'что',
+  'требуется',
+  'требуются',
+  'нужен',
+  'нужна',
+  'нужны',
+  'ищем',
+  'работа',
+  'работу',
+  'работник',
+  'работники',
+  'рабочий',
+  'рабочие',
+  'специалист',
+  'специалисты',
+  'мастер',
+  'мастера',
+  'бригада',
+  'бригады',
+  'услуга',
+  'услуги',
+  'объект',
+  'объекты',
+  'день',
+  'дня',
+  'руб',
+  'рублей',
+  'р',
+  '₽'
+]);

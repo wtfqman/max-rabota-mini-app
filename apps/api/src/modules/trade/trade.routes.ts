@@ -29,7 +29,7 @@ function createTradeRouter(
 ): Router {
   const router = Router();
   const repository = new TradeRepository(container.db, options.moduleName);
-  const service = new TradeService(repository, container.adService, options.adType);
+  const service = new TradeService(repository, container.adService, options.adType, container.moderationNotificationService);
   const controller = new TradeController(service);
 
   router.get('/status', controller.status);

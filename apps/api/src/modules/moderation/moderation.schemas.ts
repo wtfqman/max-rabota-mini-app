@@ -11,7 +11,7 @@ export const moderationQueueQuerySchema = adListQuerySchema.pick({
   perPage: true
 }).extend({
   status: z
-    .enum(['pending_moderation', 'approved', 'rejected', 'published', 'hidden', 'archived'])
+    .enum(['pending_moderation', 'approved', 'rejected', 'published', 'hidden', 'archived', 'deleted', 'test'])
     .default('pending_moderation')
 });
 

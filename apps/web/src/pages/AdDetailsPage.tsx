@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Heart, Phone, RefreshCw, Star } from 'lucide-react';
+import { ArrowLeft, Heart, Phone, RefreshCw } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AppPage } from '../shared/ui/AppPage.js';
 import { EmptyState } from '../shared/ui/EmptyState.js';
 import { LoadingState } from '../shared/ui/LoadingState.js';
+import { MediaPreview } from '../shared/ui/MediaPreview.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { StatChip } from '../shared/ui/StatChip.js';
 import type { PublicAdContact } from '../features/vacancies/vacancy.types.js';
-import type { PublicAdDetail, ReviewItem } from '../features/ads/ad.types.js';
+import type { PublicAdDetail } from '../features/ads/ad.types.js';
+import { ReviewsBlock } from '../features/reviews/ReviewsBlock.js';
 
 export function AdDetailsPage() {
   const { adId } = useParams();
@@ -18,8 +21,9 @@ export function AdDetailsPage() {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [favoriteNotice, setFavoriteNotice] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const accessToken = useAppStore((state) => state.accessToken);
 
   useEffect(() => {
     if (!adId) {
@@ -40,23 +44,6 @@ export function AdDetailsPage() {
         }
         setAd(response.data);
         setStatus('ready');
-
-        if (response.data.type === 'resume') {
-          void apiClient
-            .listUserReviews(response.data.owner.id)
-            .then((reviewsResponse) => {
-              if (active) {
-                setReviews(reviewsResponse.data);
-              }
-            })
-            .catch(() => {
-              if (active) {
-                setReviews([]);
-              }
-            });
-        } else {
-          setReviews([]);
-        }
       })
       .catch((requestError: unknown) => {
         if (!active) {
@@ -66,23 +53,33 @@ export function AdDetailsPage() {
         setStatus('error');
       });
 
-    apiClient
-      .listFavorites()
-      .then((response) => setIsFavorite(response.data.some((item) => item.ad.id === adId)))
-      .catch(() => setIsFavorite(false));
+    if (accessToken) {
+      apiClient
+        .listFavorites()
+        .then((response) => setIsFavorite(response.data.some((item) => item.ad.id === adId)))
+        .catch(() => setIsFavorite(false));
+    } else {
+      setIsFavorite(false);
+    }
 
     return () => {
       active = false;
     };
-  }, [adId, reloadKey]);
+  }, [accessToken, adId, reloadKey]);
 
   const toggleFavorite = async () => {
+    if (!accessToken) {
+      setFavoriteNotice('Лайки и отзывы доступны после входа через MAX mini app.');
+      return;
+    }
+
     if (!ad) {
       return;
     }
 
     const previous = isFavorite;
     setIsFavorite(!previous);
+    setFavoriteNotice(null);
 
     try {
       if (previous) {
@@ -92,6 +89,7 @@ export function AdDetailsPage() {
       }
     } catch {
       setIsFavorite(previous);
+      setFavoriteNotice('Не удалось обновить избранное. Попробуйте ещё раз.');
     }
   };
 
@@ -128,14 +126,19 @@ export function AdDetailsPage() {
 
       <section className="overflow-hidden rounded-panel border border-white/8 bg-[linear-gradient(180deg,rgba(16,23,20,0.98),rgba(10,15,13,0.98))] shadow-glow app-fade-up">
         {ad.coverPhoto ? (
-          <img src={ad.coverPhoto.previewUrl ?? ad.coverPhoto.url} alt="" className="aspect-[4/3] w-full object-cover" />
+          <MediaPreview
+            src={ad.coverPhoto.previewUrl ?? ad.coverPhoto.url}
+            mimeType={ad.coverPhoto.mimeType}
+            alt=""
+            className="aspect-[4/3] w-full object-cover"
+          />
         ) : null}
-        <div className="grid gap-3 p-4">
+        <div className="grid gap-2.5 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-accent-green">{typeLabel(ad.type)}</p>
-              <h1 className="text-3xl font-black text-text-primary">{ad.title}</h1>
-              {ad.subtitle ? <p className="text-base text-text-secondary">{ad.subtitle}</p> : null}
+              <h1 className="text-2xl font-black text-text-primary">{ad.title}</h1>
+              {ad.subtitle ? <p className="text-sm text-text-secondary">{ad.subtitle}</p> : null}
             </div>
             <ActionButton
               variant="secondary"
@@ -146,20 +149,29 @@ export function AdDetailsPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {ad.category ? <StatChip label={ad.category} tone="green" /> : null}
-            {ad.locationShort ? <StatChip label={ad.locationShort} tone="cyan" /> : null}
+            {ad.locationShort ? <StatChip label={ad.locationShort} tone="green" /> : null}
             {ad.shortSalary ? <StatChip label={ad.shortSalary} /> : null}
           </div>
         </div>
       </section>
 
+      {favoriteNotice ? (
+        <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold text-accent-green">
+          {favoriteNotice}
+        </p>
+      ) : null}
+
       {ad.description ? (
         <SectionCard title={ad.type === 'resume' ? 'О себе' : 'Описание'}>
-          <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{ad.description}</p>
+          <p className="whitespace-pre-line text-sm leading-6 text-text-secondary">{ad.description}</p>
         </SectionCard>
       ) : null}
 
-      {ad.type === 'resume' ? <ResumeReviews reviews={reviews} /> : null}
-
+      {ad.photos.length > 0 ? (
+        <SectionCard title="Медиа" description="Все фото и видео из объявления. Первое фото используется как обложка.">
+          <MediaGallery media={ad.photos} title={ad.title} />
+        </SectionCard>
+      ) : null}
       {ad.type === 'equipment' ? (
         <SectionCard title="Детали техники">
           <DetailGrid
@@ -206,7 +218,26 @@ export function AdDetailsPage() {
           <p className="text-sm text-text-secondary">Контакты пока не указаны.</p>
         )}
       </SectionCard>
+
+      <ReviewsBlock subjectUserId={ad.owner.id} adId={ad.id} adTitle={ad.title} />
     </AppPage>
+  );
+}
+
+function MediaGallery({ media, title }: { media: PublicAdDetail['photos']; title: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {media.map((item) => (
+        <div key={item.id} className="h-40 overflow-hidden rounded-[18px] border border-white/10 bg-surface-900">
+          <MediaPreview
+            src={item.previewUrl ?? item.url}
+            mimeType={item.mimeType}
+            alt={item.altText ?? title}
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -282,36 +313,5 @@ function DetailGrid({ items }: { items: Array<[string, string | null]> }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function ResumeReviews({ reviews }: { reviews: ReviewItem[] }) {
-  const average = reviews.length
-    ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
-    : null;
-
-  return (
-    <SectionCard title="Отзывы" description="Небольшой сигнал доверия без лишней перегрузки.">
-      <div className="grid gap-3">
-        <div className="flex flex-wrap gap-2">
-          <StatChip
-            label={average ? `${average.toFixed(1)} из 5` : 'Отзывов пока нет'}
-            tone="green"
-            icon={<Star size={15} />}
-          />
-          {reviews.length ? <StatChip label={`${reviews.length} отзывов`} /> : null}
-        </div>
-        {reviews.slice(0, 2).map((review) => (
-          <div key={review.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
-            <div className="mb-1 flex items-center gap-1 text-accent-green">
-              {Array.from({ length: review.rating }).map((_, index) => (
-                <Star key={index} size={14} className="fill-accent-green" />
-              ))}
-            </div>
-            {review.text ? <p className="text-sm leading-6 text-text-secondary">{review.text}</p> : null}
-          </div>
-        ))}
-      </div>
-    </SectionCard>
   );
 }

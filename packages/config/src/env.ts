@@ -82,6 +82,7 @@ const envSchema = z.object({
   MAX_LONG_POLLING_TIMEOUT_SECONDS: z.coerce.number().int().min(0).max(90).default(30),
   MAX_LONG_POLLING_LIMIT: z.coerce.number().int().min(1).max(1000).default(100),
   MAX_CHANNEL_CHAT_ID: optionalString,
+  MAX_MINI_APP_WEB_APP: optionalString,
   SESSION_SECRET: z.string().min(32).optional(),
   SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   MINI_APP_URL: optionalUrl,
@@ -154,7 +155,8 @@ export const config = {
     initDataMaxAgeSeconds: env.MAX_INIT_DATA_MAX_AGE_SECONDS,
     longPollingTimeoutSeconds: env.MAX_LONG_POLLING_TIMEOUT_SECONDS,
     longPollingLimit: env.MAX_LONG_POLLING_LIMIT,
-    channelChatId: env.MAX_CHANNEL_CHAT_ID
+    channelChatId: env.MAX_CHANNEL_CHAT_ID,
+    miniAppWebApp: env.MAX_MINI_APP_WEB_APP
   }
 } as const;
 

@@ -28,6 +28,23 @@ export class UsersController extends FoundationController {
     });
   });
 
+  team = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const users = await this.usersService.listTeamUsers(request.query as { q?: string; role?: 'user' | 'moderator' | 'admin' });
+
+    sendOk(response, users.map(serializeTeamUser));
+  });
+
+  updateRole = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const actorId = this.requireUserId(request);
+    const user = await this.usersService.updateUserRole(
+      actorId,
+      request.params.userId,
+      request.body as { role: 'user' | 'moderator' | 'admin' }
+    );
+
+    sendOk(response, serializeRoleUpdate(user));
+  });
+
   private requireUserId(request: Request): string {
     if (!request.auth?.userId) {
       throw new AppError('Authentication required', 401);
@@ -35,6 +52,30 @@ export class UsersController extends FoundationController {
 
     return request.auth.userId;
   }
+}
+
+function serializeRoleUpdate(user: Awaited<ReturnType<UsersService['updateUserRole']>>) {
+  return {
+    id: user.id,
+    role: user.role.toLowerCase(),
+    updatedAt: user.updatedAt.toISOString()
+  };
+}
+
+function serializeTeamUser(user: Awaited<ReturnType<UsersService['listTeamUsers']>>[number]) {
+  return {
+    id: user.id,
+    maxUserId: user.maxUserId.toString(),
+    maxUsername: user.maxUsername,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    displayName: user.displayName,
+    role: user.role.toLowerCase(),
+    status: user.status.toLowerCase(),
+    createdAt: user.createdAt.toISOString(),
+    lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+    adsTotal: user._count.ads
+  };
 }
 
 function serializeMe(

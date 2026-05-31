@@ -7,6 +7,7 @@ import {
   type CreateAdDto
 } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
+import type { ModerationNotificationService } from '../moderation/moderation-notification.service.js';
 import type { CreateTradeAdDto } from './trade.schemas.js';
 import type { TradeRepository } from './trade.repository.js';
 
@@ -14,7 +15,8 @@ export class TradeService extends FoundationService {
   constructor(
     repository: TradeRepository,
     private readonly coreAdService: CoreAdService,
-    private readonly adType: Extract<AdTypeCode, 'material' | 'tool'>
+    private readonly adType: Extract<AdTypeCode, 'material' | 'tool'>,
+    private readonly moderationNotificationService: ModerationNotificationService
   ) {
     super(repository);
   }
@@ -47,6 +49,9 @@ export class TradeService extends FoundationService {
       benefits: []
     };
 
-    return this.coreAdService.createAdForModeration(ownerId, createDto);
+    const ad = await this.coreAdService.createAdForModeration(ownerId, createDto);
+    void this.moderationNotificationService.notifyNewAd(ad, ownerId);
+
+    return ad;
   }
 }

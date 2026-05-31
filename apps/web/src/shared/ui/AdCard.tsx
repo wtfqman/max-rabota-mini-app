@@ -96,7 +96,7 @@ export function AdCard({
         <article className="space-y-4">
           <div className="flex items-start gap-3">
             {coverImageUrl ? (
-              <div className="h-20 w-20 shrink-0 overflow-hidden rounded-panel border border-white/10 bg-surface-800">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-panel border border-white/10 bg-surface-800">
                 <MediaPreview src={coverImageUrl} mimeType={coverMimeType} className="h-full w-full object-cover" controls={false} />
               </div>
             ) : (
@@ -107,7 +107,7 @@ export function AdCard({
 
             <div className="min-w-0 flex-1 pt-1">
               <p className="text-xs font-extrabold uppercase tracking-[0.1em] text-accent-green">{typeLabel}</p>
-              <h2 className="mt-1 line-clamp-2 text-2xl font-black leading-tight text-text-primary">{title}</h2>
+              <h2 className="mt-1 line-clamp-2 text-xl font-black leading-tight text-text-primary">{title}</h2>
               {subtitle ? <p className="mt-1 line-clamp-1 text-sm font-semibold text-text-secondary">{subtitle}</p> : null}
             </div>
 

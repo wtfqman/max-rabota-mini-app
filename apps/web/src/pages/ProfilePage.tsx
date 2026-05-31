@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { FileUser, Heart, ListChecks, RefreshCw } from 'lucide-react';
+import { Bell, FileUser, Heart, ListChecks, Megaphone, RefreshCw, Settings2, Users } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
-import { AppPage } from '../shared/ui/AppPage.js';
+import type { UserProfilePayload } from '../features/ads/ad.types.js';
+import type { AuthProfile } from '../features/auth/auth.types.js';
+import { apiClient } from '../shared/api/client.js';
+import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
+import { AppPage } from '../shared/ui/AppPage.js';
 import { EmptyState } from '../shared/ui/EmptyState.js';
 import { LinkButton } from '../shared/ui/LinkButton.js';
 import { LoadingState } from '../shared/ui/LoadingState.js';
 import { ProfileHeader } from '../shared/ui/ProfileHeader.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { TileCard } from '../shared/ui/TileCard.js';
-import { apiClient } from '../shared/api/client.js';
-import { getUserFacingError } from '../shared/api/user-facing.js';
-import type { UserProfilePayload } from '../features/ads/ad.types.js';
-import type { AuthProfile } from '../features/auth/auth.types.js';
 
 export function ProfilePage() {
   const currentUser = useAppStore((state) => state.user);
@@ -33,6 +33,7 @@ export function ProfilePage() {
         if (!active) {
           return;
         }
+
         setProfile(response.data);
         setStatus('ready');
       })
@@ -85,53 +86,119 @@ export function ProfilePage() {
 
   const fullName = [profile.firstName, profile.lastName].filter(Boolean).join(' ');
   const primaryName = profile.displayName ?? fullName;
-  const name = primaryName || profile.maxUsername || 'Профиль Rabst24';
+  const name = primaryName || profile.maxUsername || 'Профиль';
 
   return (
     <AppPage>
       <ProfileHeader
         name={name}
-        subtitle={profile.profile?.city ? `${profile.profile.city} в MAX` : 'Ваш рабочий профиль в MAX'}
+        subtitle={profile.profile?.city ? `${profile.profile.city} в MAX` : 'Ваш кабинет в MAX'}
         avatarUrl={profile.profile?.avatarUrl ?? undefined}
         stats={[
           { label: 'объявления', value: String(profile.stats.adsTotal) },
-          { label: 'избранное', value: String(profile.stats.favoritesTotal) },
-          { label: 'отзывы', value: String(profile.stats.reviewsTotal) }
+          { label: 'избранное', value: String(profile.stats.favoritesTotal) }
         ]}
       />
 
-      <SectionCard title="О профиле" description="Короткая информация, которую можно использовать в объявлениях.">
+      {error ? (
+        <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm text-accent-green">
+          {error}
+        </div>
+      ) : null}
+
+      <section className="grid gap-3">
+        {profile.role === 'admin' || profile.role === 'moderator' ? (
+          <TileCard
+            to="/moderation"
+            title="Подтверждение модерации"
+            description="Проверить и опубликовать новые объявления"
+            icon={<ListChecks size={23} />}
+            tone="green"
+          />
+        ) : null}
+        {profile.role === 'admin' ? (
+          <TileCard
+            to="/team"
+            title="Команда"
+            description="Назначать админов и модераторов по MAX ID или username"
+            icon={<Users size={23} />}
+            tone="green"
+          />
+        ) : null}
+        <TileCard
+          to="/my-ads"
+          title="Мои объявления"
+          description="Редактировать, скрывать, повторно публиковать"
+          icon={<ListChecks size={23} />}
+          tone="green"
+        />
+        <TileCard
+          to="/create/resume"
+          title="Создать резюме"
+          description="ФИО, специальность, опыт, контакт и зарплата"
+          icon={<FileUser size={23} />}
+          tone="green"
+        />
+        <TileCard
+          to="/favorites"
+          title="Избранное"
+          description="Сохранённые вакансии, техника и материалы"
+          icon={<Heart size={23} />}
+          tone="green"
+        />
+        <TileCard
+          to="/my-ads"
+          title="Пульт публикации"
+          description="Автопубликация, срок размещения и напоминания"
+          icon={<Settings2 size={23} />}
+          tone="green"
+        />
+      </section>
+
+      <SectionCard
+        title="Пульт управления публикацией"
+        description="В карточках ваших объявлений можно включить автопубликацию, выбрать повтор, срок размещения и напоминание перед отключением."
+      >
+        <div className="grid gap-3">
+          <div className="grid gap-2 rounded-panel border border-white/10 bg-surface-900/92 p-3">
+            <div className="flex items-center gap-2 text-base font-extrabold text-text-primary">
+              <Megaphone size={18} className="text-accent-green" />
+              Управление без лишних слов
+            </div>
+            <p className="text-sm leading-6 text-text-secondary">
+              В кабинете показываются только понятные статусы: активно, на модерации, скрыто или завершено.
+            </p>
+          </div>
+          <div className="grid gap-2 rounded-panel border border-white/10 bg-surface-900/92 p-3">
+            <div className="flex items-center gap-2 text-base font-extrabold text-text-primary">
+              <Bell size={18} className="text-accent-green" />
+              Напоминания
+            </div>
+            <p className="text-sm leading-6 text-text-secondary">
+              Если включить напоминание, объявление заранее подскажет, что срок размещения подходит к концу.
+            </p>
+          </div>
+          <LinkButton to="/my-ads" variant="primary" icon={<Settings2 size={18} />}>
+            Открыть пульт
+          </LinkButton>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="О профиле" description="Информация, которая помогает объявлениям выглядеть доверительно.">
         <div className="grid gap-2 text-sm leading-6 text-text-secondary">
-          <p>В Rabst24 с {formatDate(profile.createdAt)}</p>
+          <p>В приложении с {formatDate(profile.createdAt)}</p>
           {profile.profile?.districtText ? <p>Район: {profile.profile.districtText}</p> : null}
           {profile.profile?.about ? <p>{profile.profile.about}</p> : null}
         </div>
       </SectionCard>
 
-      <section className="grid grid-cols-2 gap-3">
-        <TileCard to="/my-ads" title="Мои объявления" description="Ваши публикации" icon={<ListChecks size={22} />} />
-        <TileCard to="/create/resume" title="Резюме" description="Создать или обновить" icon={<FileUser size={22} />} tone="cyan" />
-        <TileCard to="/favorites" title="Избранное" description="Сохранённые объявления" icon={<Heart size={22} />} tone="green" />
-      </section>
-
-      <SectionCard title="Кабинет" description="Самое нужное для работы с объявлениями.">
-        <div className="grid gap-2">
-          <LinkButton to="/my-ads" variant="secondary" icon={<ListChecks size={18} />}>
-            Мои объявления
+      {profile.role === 'admin' || profile.role === 'moderator' ? (
+        <SectionCard title="Для модерации" description="Этот блок виден только пользователям с расширенными правами.">
+          <LinkButton to="/moderation" variant="secondary" icon={<ListChecks size={18} />}>
+            Очередь модерации
           </LinkButton>
-          <LinkButton to="/create/resume" variant="secondary" icon={<FileUser size={18} />}>
-            Создать резюме
-          </LinkButton>
-          <LinkButton to="/favorites" variant="secondary" icon={<Heart size={18} />}>
-            Избранное
-          </LinkButton>
-          {profile.role === 'admin' || profile.role === 'moderator' ? (
-            <LinkButton to="/moderation" variant="secondary" icon={<ListChecks size={18} />}>
-              Очередь модерации
-            </LinkButton>
-          ) : null}
-        </div>
-      </SectionCard>
+        </SectionCard>
+      ) : null}
     </AppPage>
   );
 }

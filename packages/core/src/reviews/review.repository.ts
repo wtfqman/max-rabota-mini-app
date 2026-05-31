@@ -1,7 +1,7 @@
-import { ReviewStatus, type PrismaClient, type Review } from '@rabst24/db';
+import { ReviewStatus, type Ad, type PrismaClient, type Review } from '@rabst24/db';
 
 export interface ReviewCreateData {
-  adId?: string;
+  adId: string;
   rating?: number;
   text?: string;
 }
@@ -14,6 +14,11 @@ export type ReviewWithAuthor = Review & {
     lastName: string | null;
     maxUsername: string | null;
   };
+  ad: {
+    id: string;
+    title: string;
+    type: string;
+  } | null;
 };
 
 export class ReviewRepository {
@@ -33,6 +38,34 @@ export class ReviewRepository {
     });
   }
 
+  async findTargetAd(adId: string): Promise<Pick<Ad, 'id' | 'ownerId' | 'title' | 'type' | 'status' | 'deletedAt'> | null> {
+    return this.db.ad.findFirst({
+      where: {
+        id: adId,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        ownerId: true,
+        title: true,
+        type: true,
+        status: true,
+        deletedAt: true
+      }
+    });
+  }
+
+  async findByAuthorSubjectAd(authorId: string, subjectId: string, adId: string): Promise<Review | null> {
+    return this.db.review.findFirst({
+      where: {
+        authorId,
+        subjectId,
+        adId,
+        deletedAt: null
+      }
+    });
+  }
+
   async listForUser(userId: string): Promise<ReviewWithAuthor[]> {
     return this.db.review.findMany({
       where: {
@@ -48,6 +81,13 @@ export class ReviewRepository {
             firstName: true,
             lastName: true,
             maxUsername: true
+          }
+        },
+        ad: {
+          select: {
+            id: true,
+            title: true,
+            type: true
           }
         }
       },

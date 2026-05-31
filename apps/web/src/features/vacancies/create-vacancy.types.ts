@@ -33,7 +33,7 @@ export const createVacancyPayloadSchema = z.object({
   salaryTo: z.number().nonnegative().optional(),
   salaryPeriod: z.enum(['HOUR', 'DAY', 'WEEK', 'MONTH', 'PROJECT']).optional(),
   isSalaryNegotiable: z.boolean().optional(),
-  description: z.string().trim().min(20, 'Добавьте описание от 20 символов').max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   requirements: z.array(z.string().trim().min(1).max(500)).max(30),
   responsibilities: z.array(z.string().trim().min(1).max(500)).max(30),
   benefits: z.array(z.string().trim().min(1).max(500)).max(30),
@@ -68,7 +68,7 @@ export const createVacancyPayloadSchema = z.object({
         altText: z.string().optional()
       })
     )
-    .max(8)
+    .max(9)
 });
 
 export type CreateVacancyPayload = z.infer<typeof createVacancyPayloadSchema>;

@@ -1,4 +1,5 @@
 export * from './ads/ad.repository.js';
+export * from './ads/ad-publication-settings.js';
 export * from './ads/ad.serializer.js';
 export * from './ads/ad.service.js';
 export * from './channel/channel-post.formatter.js';

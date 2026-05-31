@@ -11,7 +11,12 @@ import { VacanciesService } from './vacancies.service.js';
 export function createVacanciesRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new VacanciesRepository(container.db);
-  const service = new VacanciesService(repository, container.adService);
+  const service = new VacanciesService(
+    repository,
+    container.adService,
+    container.userService,
+    container.moderationNotificationService
+  );
   const controller = new VacanciesController(service);
 
   router.get('/status', controller.status);

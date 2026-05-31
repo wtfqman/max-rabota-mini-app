@@ -9,6 +9,7 @@ export async function bootstrap(): Promise<void> {
 
   await prisma.$connect();
   logger.info('Database connection established');
+  container.autoPublicationService.start();
 
   const server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
     const httpServer = app.listen(config.port, () => {
@@ -28,6 +29,7 @@ export async function bootstrap(): Promise<void> {
         process.exitCode = 1;
       }
 
+      container.autoPublicationService.stop();
       await prisma.$disconnect();
       logger.info('API server stopped');
       process.exit();

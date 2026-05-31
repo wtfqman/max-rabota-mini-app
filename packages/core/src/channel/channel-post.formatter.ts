@@ -1,155 +1,279 @@
-import { AD_TYPE_LABELS } from '@rabst24/shared';
+import type { AdTypeCode } from '@rabst24/shared';
+import type { MaxInlineKeyboardAttachment } from '@rabst24/max-api';
 import type { AdWithDetailsRecord } from '../ads/ad.repository.js';
 
+const DEFAULT_MINI_APP_URL = 'https://app.rabst24.ru';
+
+export interface ChannelPostFormatterOptions {
+  miniAppUrl?: string;
+  miniAppWebApp?: string | null;
+}
+
 export class ChannelPostFormatter {
-  constructor(private readonly miniAppUrl = 'https://app.rabst24.ru') {}
+  private readonly miniAppUrl: string;
+  private readonly miniAppWebApp?: string;
+
+  constructor(options: string | ChannelPostFormatterOptions = DEFAULT_MINI_APP_URL) {
+    if (typeof options === 'string') {
+      this.miniAppUrl = options;
+      return;
+    }
+
+    this.miniAppUrl = options.miniAppUrl ?? DEFAULT_MINI_APP_URL;
+    this.miniAppWebApp = options.miniAppWebApp?.trim() || undefined;
+  }
 
   formatAd(ad: AdWithDetailsRecord): string {
-    const type = ad.type.toLowerCase() as keyof typeof AD_TYPE_LABELS;
-    const detailsUrl = `${this.miniAppUrl.replace(/\/+$/, '')}/${this.getDetailsPath(type, ad.id)}`;
-    const contacts = ad.contacts.map((contact) => {
-      const label = contact.label ?? contact.type.toLowerCase();
-      return `${label}: ${contact.value}`;
-    });
+    const type = this.getAdType(ad);
     const lines = [
-      `${AD_TYPE_LABELS[type]}: ${ad.title}`,
-      this.getSubtitle(ad),
-      ad.description ? `\n${ad.description}` : null,
-      ...this.getTypeSpecificLines(ad),
-      ad.categoryText ? `Категория: ${ad.categoryText}` : null,
-      ad.districtText ? `Район: ${ad.districtText}` : null,
-      this.getAddress(ad) ? `Адрес: ${this.getAddress(ad)}` : null,
-      ad.photos[0] ? `Фото: ${ad.photos[0].url}` : null,
-      contacts.length ? `\nКонтакты:\n${contacts.join('\n')}` : null,
-      `\nОткрыть объявление: ${detailsUrl}`
+      `**${this.getTypeLabel(type)}: ${this.escapeMarkdown(ad.title)}**`,
+      ...this.getTemplateLines(ad, type),
+      this.getContactsBlock(ad),
+      `\n[Открыть объявление в приложении](${this.getDetailsUrl(ad)})`
     ];
 
-    return lines.filter(Boolean).join('\n');
+    return this.trimToMaxMessageLength(lines.filter(Boolean).join('\n'));
   }
 
-  private getSubtitle(ad: AdWithDetailsRecord): string | null {
-    if (ad.vacancyDetails?.companyName) {
-      return `Компания: ${ad.vacancyDetails.companyName}`;
+  getDetailsUrl(ad: AdWithDetailsRecord): string {
+    const miniAppLink = this.getMiniAppLaunchUrl(this.getMiniAppPayload(ad));
+
+    if (miniAppLink) {
+      return miniAppLink;
     }
 
-    if (ad.resumeDetails?.desiredPosition) {
-      return `Профессия: ${ad.resumeDetails.desiredPosition}`;
-    }
-
-    const equipmentName = [ad.equipmentDetails?.brand, ad.equipmentDetails?.model]
-      .filter(Boolean)
-      .join(' ');
-
-    return equipmentName ? `Модель: ${equipmentName}` : null;
+    return this.getWebDetailsUrl(ad);
   }
 
-  private getTypeSpecificLines(ad: AdWithDetailsRecord): Array<string | null> {
-    const type = ad.type.toLowerCase();
+  private getWebDetailsUrl(ad: AdWithDetailsRecord): string {
+    const type = this.getAdType(ad);
+    return `${this.miniAppUrl.replace(/\/+$/, '')}/${this.getDetailsPath(type, ad.id)}`;
+  }
+
+  createCtaKeyboard(ad: AdWithDetailsRecord): MaxInlineKeyboardAttachment {
+    const miniAppButton = this.createMiniAppButton(ad);
+
+    return {
+      type: 'inline_keyboard',
+      payload: {
+        buttons: [
+          [
+            miniAppButton ?? {
+              type: 'link',
+              text: 'Открыть объявление',
+              url: this.getDetailsUrl(ad)
+            }
+          ]
+        ]
+      }
+    };
+  }
+
+  private createMiniAppButton(ad: AdWithDetailsRecord): MaxInlineKeyboardAttachment['payload']['buttons'][number][number] | null {
+    if (!this.miniAppWebApp) {
+      return null;
+    }
+
+    const payload = this.getMiniAppPayload(ad);
+
+    return {
+      type: 'open_app',
+      text: 'Открыть в mini app',
+      web_app: this.getMiniAppLaunchValue(payload),
+      payload
+    };
+  }
+
+  private getMiniAppLaunchValue(payload: string): string {
+    if (!this.miniAppWebApp) {
+      return this.miniAppUrl;
+    }
+
+    return this.getMiniAppLaunchUrl(payload) ?? this.miniAppWebApp;
+  }
+
+  private getMiniAppLaunchUrl(payload: string): string | null {
+    if (!this.miniAppWebApp || !this.isHttpUrl(this.miniAppWebApp)) {
+      return null;
+    }
+
+    try {
+      const url = new URL(this.miniAppWebApp);
+      url.searchParams.set('startapp', payload);
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private getMiniAppPayload(ad: AdWithDetailsRecord): string {
+    return `ad_${this.getAdType(ad)}_${ad.id}`;
+  }
+
+  private isHttpUrl(value: string): boolean {
+    return value.startsWith('https://') || value.startsWith('http://');
+  }
+
+  private getTemplateLines(ad: AdWithDetailsRecord, type: AdTypeCode): Array<string | null> {
+    if (type === 'resume') {
+      return this.formatResume(ad);
+    }
 
     if (type === 'vacancy') {
-      const metro = [
-        ...(ad.vacancyDetails?.metroStations.map((item) => {
-          const minutes = item.walkingMinutes ? `, ${item.walkingMinutes} мин` : '';
-          return `${item.metroStation.name}${minutes}`;
-        }) ?? []),
-        ...this.getMetadataMetroStations(ad)
-      ];
-
-      return [
-        ad.vacancyDetails?.schedule ? `График: ${ad.vacancyDetails.schedule}` : null,
-        ad.vacancyDetails?.experience ? `Опыт: ${ad.vacancyDetails.experience}` : null,
-        this.getSalary(ad),
-        metro.length ? `Метро: ${metro.join(', ')}` : null,
-        ad.requirements.length
-          ? `\nТребования:\n${ad.requirements.map((item) => `- ${item.text}`).join('\n')}`
-          : null,
-        ad.responsibilities.length
-          ? `\nОбязанности:\n${ad.responsibilities.map((item) => `- ${item.text}`).join('\n')}`
-          : null,
-        ad.benefits.length ? `\nЛьготы:\n${ad.benefits.map((item) => `- ${item.text}`).join('\n')}` : null
-      ];
+      return this.formatVacancy(ad);
     }
 
-    if (type === 'resume') {
-      const experience = this.getMetadataString(ad, ['experienceText', 'experience']);
-      return [
-        experience ? `Опыт: ${experience}` : null,
-        ad.resumeDetails?.expectedSalary
-          ? `Желаемая зарплата: ${ad.resumeDetails.expectedSalary.toString()} ${ad.resumeDetails.salaryCurrency}`
-          : null
-      ];
+    if (type === 'equipment') {
+      return this.formatEquipment(ad);
     }
 
-    if (type === 'material' || type === 'tool') {
-      return [
-        ad.priceAmount ? `Цена: ${ad.priceAmount.toString()} ${ad.currency}` : null
-      ];
-    }
+    return this.formatTradeAd(ad);
+  }
+
+  private formatResume(ad: AdWithDetailsRecord): Array<string | null> {
+    return [
+      this.formatLine('Профессия', ad.resumeDetails?.desiredPosition),
+      this.formatLine('О себе / опыт', ad.description, ['Опыт', 'О себе']),
+      this.formatLine('Желаемая зарплата', this.formatMoneyValue(ad.resumeDetails?.expectedSalary, ad.resumeDetails?.salaryCurrency ?? ad.currency)),
+      this.formatLine('Район', ad.districtText),
+      this.formatLine('Адрес', this.getAddress(ad))
+    ];
+  }
+
+  private formatVacancy(ad: AdWithDetailsRecord): Array<string | null> {
+    return [
+      this.formatLine('Компания', this.getVacancyCompanyName(ad)),
+      this.formatLine('Описание', ad.description, ['Описание']),
+      this.getSalary(ad),
+      this.formatLine('Район', ad.districtText),
+      this.formatLine('Адрес', this.getAddress(ad))
+    ];
+  }
+
+  private formatEquipment(ad: AdWithDetailsRecord): Array<string | null> {
+    const model = [ad.equipmentDetails?.brand, ad.equipmentDetails?.model].filter(Boolean).join(' ');
 
     return [
-      ad.equipmentDetails?.condition ? `Состояние: ${ad.equipmentDetails.condition.toLowerCase()}` : null,
-      ad.equipmentDetails?.rentalPrice
-        ? `Аренда: ${ad.equipmentDetails.rentalPrice.toString()} ${ad.equipmentDetails.currency}`
-        : null,
-      ad.equipmentDetails?.salePrice
-        ? `Цена: ${ad.equipmentDetails.salePrice.toString()} ${ad.equipmentDetails.currency}`
-        : null
+      this.formatLine('Модель', model || null),
+      this.formatLine('Описание', ad.description, ['Описание']),
+      this.formatLine('Состояние', ad.equipmentDetails?.condition?.toLowerCase()),
+      this.formatLine('Аренда', this.formatMoneyValue(ad.equipmentDetails?.rentalPrice, ad.equipmentDetails?.currency ?? ad.currency)),
+      this.formatLine('Цена', this.formatMoneyValue(ad.equipmentDetails?.salePrice, ad.equipmentDetails?.currency ?? ad.currency)),
+      this.formatLine('Район', ad.districtText),
+      this.formatLine('Адрес', this.getAddress(ad))
+    ];
+  }
+
+  private formatTradeAd(ad: AdWithDetailsRecord): Array<string | null> {
+    return [
+      this.formatLine('Описание', ad.description, ['Описание']),
+      this.formatLine('Цена', this.formatMoneyValue(ad.priceAmount, ad.currency)),
+      this.formatLine('Район', ad.districtText),
+      this.formatLine('Адрес', this.getAddress(ad))
     ];
   }
 
   private getSalary(ad: AdWithDetailsRecord): string | null {
+    const salaryText = this.getMetadataString(ad, ['salaryText']);
+    if (salaryText) {
+      return this.formatLine('Зарплата', salaryText, ['Зарплата']);
+    }
+
     if (!ad.vacancyDetails) {
-      return ad.priceAmount ? `Цена: ${ad.priceAmount.toString()} ${ad.currency}` : null;
+      return null;
     }
 
     const from = ad.vacancyDetails.salaryFrom?.toString();
     const to = ad.vacancyDetails.salaryTo?.toString();
-    const suffix = ad.vacancyDetails.salaryCurrency;
+    const suffix = this.formatCurrency(ad.vacancyDetails.salaryCurrency);
 
     if (from && to) {
-      return `Зарплата: ${from}-${to} ${suffix}`;
+      return `Зарплата: ${this.escapeMarkdown(`${from}-${to} ${suffix}`)}`;
     }
 
     if (from) {
-      return `Зарплата: от ${from} ${suffix}`;
+      return `Зарплата: ${this.escapeMarkdown(`от ${from} ${suffix}`)}`;
     }
 
     if (to) {
-      return `Зарплата: до ${to} ${suffix}`;
+      return `Зарплата: ${this.escapeMarkdown(`до ${to} ${suffix}`)}`;
     }
 
-    return ad.vacancyDetails.isSalaryNegotiable ? 'Зарплата: по договоренности' : null;
+    return ad.vacancyDetails.isSalaryNegotiable ? 'Зарплата: по договорённости' : null;
+  }
+
+  private getContactsBlock(ad: AdWithDetailsRecord): string | null {
+    const contacts = ad.contacts
+      .map((contact) => this.formatContact(contact))
+      .filter((contact): contact is string => Boolean(contact));
+
+    return contacts.length ? `\nКонтакты:\n${contacts.join('\n')}` : null;
+  }
+
+  private getVacancyCompanyName(ad: AdWithDetailsRecord): string | null {
+    const companyName = ad.vacancyDetails?.companyName?.trim();
+
+    if (companyName && companyName !== 'Работодатель' && companyName !== 'Работодатель Rabst24') {
+      return companyName;
+    }
+
+    return this.getOwnerName(ad);
+  }
+
+  private getOwnerName(ad: AdWithDetailsRecord): string | null {
+    const fullName = [ad.owner.firstName, ad.owner.lastName].filter(Boolean).join(' ').trim();
+
+    return ad.owner.displayName || fullName || ad.owner.maxUsername || null;
+  }
+
+  private formatContact(contact: AdWithDetailsRecord['contacts'][number]): string | null {
+    const value = this.stripKnownLabel(contact.value, ['Контакт', 'Контакты']).trim();
+
+    if (!value) {
+      return null;
+    }
+
+    const rawLabel = contact.label ?? this.formatContactType(contact.type);
+    const label = this.stripKnownLabel(rawLabel, ['Контакт', 'Контакты']).trim();
+
+    if (!label || this.isGenericContactLabel(rawLabel)) {
+      return this.escapeMarkdown(value);
+    }
+
+    return `${this.escapeMarkdown(label)}: ${this.escapeMarkdown(this.stripKnownLabel(value, [label]))}`;
+  }
+
+  private formatLine(label: string, value: unknown, duplicateLabels: string[] = [label]): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const text = String(value).trim();
+    if (!text) {
+      return null;
+    }
+
+    return `${label}: ${this.escapeMarkdown(this.stripKnownLabel(text, duplicateLabels))}`;
+  }
+
+  private stripKnownLabel(value: string, labels: string[]): string {
+    let result = value.trim();
+
+    for (const label of labels) {
+      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(`^${escapedLabel}\\s*[:：-]?\\s*`, 'i'), '').trim();
+    }
+
+    return result;
+  }
+
+  private isGenericContactLabel(label: string): boolean {
+    const normalized = label.trim().toLowerCase();
+    return normalized === 'контакт' || normalized === 'контакты' || normalized === 'связь';
   }
 
   private getAddress(ad: AdWithDetailsRecord): string | null {
     return this.getMetadataString(ad, ['address', 'addressText', 'fullAddress', 'locationAddress']);
-  }
-
-  private getMetadataMetroStations(ad: AdWithDetailsRecord): string[] {
-    const metadata = this.getMetadataRecord(ad);
-    const stations = metadata?.metroStations;
-
-    if (!Array.isArray(stations)) {
-      return [];
-    }
-
-    return stations
-      .map((station) => {
-        if (!station || typeof station !== 'object' || Array.isArray(station)) {
-          return null;
-        }
-
-        const record = station as Record<string, unknown>;
-        const name = typeof record.name === 'string' ? record.name.trim() : '';
-
-        if (!name) {
-          return null;
-        }
-
-        const minutes = typeof record.walkingMinutes === 'number' ? `, ${record.walkingMinutes} мин` : '';
-        return `${name}${minutes}`;
-      })
-      .filter((station): station is string => Boolean(station));
   }
 
   private getMetadataString(ad: AdWithDetailsRecord, keys: string[]): string | null {
@@ -186,8 +310,8 @@ export class ChannelPostFormatter {
     }
   }
 
-  private getDetailsPath(type: keyof typeof AD_TYPE_LABELS, id: string): string {
-    const routes: Record<keyof typeof AD_TYPE_LABELS, string> = {
+  private getDetailsPath(type: AdTypeCode, id: string): string {
+    const routes: Record<AdTypeCode, string> = {
       vacancy: 'vacancies',
       resume: 'resumes',
       equipment: 'equipment',
@@ -196,5 +320,57 @@ export class ChannelPostFormatter {
     };
 
     return `${routes[type]}/${id}`;
+  }
+
+  private getAdType(ad: AdWithDetailsRecord): AdTypeCode {
+    return ad.type.toLowerCase() as AdTypeCode;
+  }
+
+  private getTypeLabel(type: AdTypeCode): string {
+    const labels: Record<AdTypeCode, string> = {
+      vacancy: 'Вакансия',
+      resume: 'Резюме',
+      equipment: 'Техника',
+      material: 'Материалы',
+      tool: 'Инструменты'
+    };
+
+    return labels[type];
+  }
+
+  private formatContactType(type: string): string {
+    const labels: Record<string, string> = {
+      MAX: 'MAX',
+      PHONE: 'Телефон',
+      EMAIL: 'Email',
+      WEBSITE: 'Сайт',
+      OTHER: 'Контакт'
+    };
+
+    return labels[type] ?? type.toLowerCase();
+  }
+
+  private formatMoneyValue(value: { toString(): string } | null | undefined, currency: string): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return `${value.toString()} ${this.formatCurrency(currency)}`;
+  }
+
+  private formatCurrency(currency: string): string {
+    return currency.toUpperCase() === 'RUB' ? '₽' : currency;
+  }
+
+  private escapeMarkdown(value: string): string {
+    return value.replace(/([\\`*_{}[\]()#+\-.!|>])/g, '\\$1');
+  }
+
+  private trimToMaxMessageLength(text: string): string {
+    if (text.length <= 3900) {
+      return text;
+    }
+
+    return `${text.slice(0, 3890).trimEnd()}...`;
   }
 }

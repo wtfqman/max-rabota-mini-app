@@ -1,4 +1,4 @@
-import { FullscreenState } from '../shared/ui/FullscreenState.js';
+﻿import { FullscreenState } from '../shared/ui/FullscreenState.js';
 
 export function NotFoundPage() {
   return (

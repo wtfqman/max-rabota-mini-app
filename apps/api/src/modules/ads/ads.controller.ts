@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
-import { serializeAdCard, serializeAdDetail, serializeAdListMeta } from '@rabst24/core';
+import { getAdPublicationSettings, serializeAdCard, serializeAdDetail, serializeAdListMeta } from '@rabst24/core';
 import { AppError, type AdListQueryDto } from '@rabst24/shared';
 import { asyncHandler } from '../../shared/http/async-handler.js';
 import { sendOk } from '../../shared/http/responses.js';
 import { FoundationController } from '../../shared/modules/foundation.controller.js';
 import type { AdsService } from './ads.service.js';
-import type { OwnedAdsQuery, UpdateOwnedAdDto } from './ads.schemas.js';
+import type { OwnedAdsQuery, PublicationSettingsDto, UpdateOwnedAdDto } from './ads.schemas.js';
 
 export class AdsController extends FoundationController {
   constructor(private readonly adsService: AdsService) {
@@ -33,7 +33,8 @@ export class AdsController extends FoundationController {
         description: ad.description,
         status: ad.status.toLowerCase(),
         updatedAt: ad.updatedAt.toISOString(),
-        moderationReason: getLatestModerationReason(ad)
+        moderationReason: getLatestModerationReason(ad),
+        publicationSettings: getPublicationSettingsPayload(ad)
       })),
       serializeAdListMeta(result)
     );
@@ -49,9 +50,41 @@ export class AdsController extends FoundationController {
     sendOk(response, serializeAdDetail(ad));
   });
 
+  updatePublicationSettings = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const ad = await this.adsService.updatePublicationSettings(
+      this.requireUserId(request),
+      request.params.adId,
+      request.body as PublicationSettingsDto
+    );
+
+    sendOk(response, {
+      ad: serializeAdDetail(ad),
+      publicationSettings: getPublicationSettingsPayload(ad)
+    });
+  });
+
   hideMine = asyncHandler(async (request: Request, response: Response): Promise<void> => {
-    const ad = await this.adsService.hideMine(this.requireUserId(request), request.params.adId);
-    sendOk(response, serializeAdDetail(ad));
+    const result = await this.adsService.hideMine(this.requireUserId(request), request.params.adId);
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  archiveMine = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const result = await this.adsService.archiveMine(this.requireUserId(request), request.params.adId);
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  deleteMine = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const result = await this.adsService.deleteMine(this.requireUserId(request), request.params.adId);
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
   });
 
   resubmitMine = asyncHandler(async (request: Request, response: Response): Promise<void> => {
@@ -74,4 +107,10 @@ function getLatestModerationReason(ad: Parameters<typeof serializeAdDetail>[0]):
     .find((log) => log.reason);
 
   return latest?.reason ?? null;
+}
+
+function getPublicationSettingsPayload(ad: Parameters<typeof serializeAdDetail>[0]) {
+  const settings = getAdPublicationSettings(ad.metadataJson);
+
+  return settings ? { adId: ad.id, ...settings } : null;
 }

@@ -6,29 +6,26 @@ export default {
     extend: {
       colors: {
         surface: {
-          950: '#050708',
-          900: '#0b1012',
-          850: '#101719',
-          800: '#141d20',
-          700: '#203034'
+          950: '#050807',
+          900: '#0b1110',
+          850: '#101815',
+          800: '#17231f',
+          700: '#24352f'
         },
-        line: '#24353a',
+        line: '#22332d',
         text: {
-          primary: '#f2f7f4',
-          secondary: '#9fb2ad',
-          muted: '#657873'
+          primary: '#f4fff9',
+          secondary: '#a9b8b0',
+          muted: '#68776f'
         },
         accent: {
           green: '#34d399',
-          greenSoft: '#12352d',
-          cyan: '#3ddbd9',
-          amber: '#f2b84b',
-          violet: '#8b7cf6'
+          greenSoft: '#123a2a'
         }
       },
       boxShadow: {
-        panel: '0 18px 60px rgba(0, 0, 0, 0.32)',
-        glow: '0 0 0 1px rgba(52, 211, 153, 0.18), 0 18px 42px rgba(11, 16, 18, 0.55)'
+        panel: '0 18px 48px rgba(0, 0, 0, 0.34)',
+        glow: '0 0 0 1px rgba(52, 211, 153, 0.22), 0 18px 44px rgba(34, 197, 94, 0.12)'
       },
       borderRadius: {
         panel: '8px'

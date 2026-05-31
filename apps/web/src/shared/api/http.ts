@@ -1,4 +1,4 @@
-import { appEnv } from '../config/app-env.js';
+﻿import { appEnv } from '../config/app-env.js';
 
 export interface ApiErrorBody {
   error?: {
@@ -46,7 +46,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   if (!response.ok) {
     const errorBody = body as ApiErrorBody;
     throw new ApiError(
-      errorBody.error?.message ?? `API request failed: ${response.status}`,
+      errorBody.error?.message ?? 'Не удалось загрузить данные.',
       response.status,
       errorBody.error?.details
     );
@@ -71,5 +71,17 @@ async function parseBody<T>(response: Response): Promise<T | null> {
     return null;
   }
 
-  return JSON.parse(text) as T;
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new ApiError('Не удалось загрузить данные. Попробуйте открыть приложение ещё раз.', response.status || 500, {
+      contentType
+    });
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError('Не удалось загрузить данные. Попробуйте ещё раз.', response.status || 500);
+  }
 }

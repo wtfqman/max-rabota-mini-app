@@ -1,4 +1,4 @@
-export type AuthPlatform = 'ios' | 'android' | 'web' | 'desktop';
+﻿export type AuthPlatform = 'ios' | 'android' | 'web' | 'desktop';
 export type AuthRole = 'user' | 'moderator' | 'admin';
 export type AuthStatus = 'active' | 'blocked' | 'deleted';
 

@@ -59,6 +59,13 @@ function serializeReviews(reviews: Awaited<ReturnType<ReviewsService['listForUse
     rating: review.rating,
     text: review.text,
     adId: review.adId,
+    ad: review.ad
+      ? {
+          id: review.ad.id,
+          title: review.ad.title,
+          type: review.ad.type.toLowerCase()
+        }
+      : null,
     createdAt: review.createdAt.toISOString()
   }));
 }

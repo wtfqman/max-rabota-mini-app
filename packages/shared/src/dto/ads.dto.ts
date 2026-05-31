@@ -31,7 +31,7 @@ export const createAdSchema = z.object({
   categoryText: z.string().trim().max(120).optional(),
   priceAmount: z.coerce.number().nonnegative().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-  photos: z.array(adPhotoInputSchema).max(8).default([]),
+  photos: z.array(adPhotoInputSchema).max(9).default([]),
   contacts: z
     .array(adContactInputSchema)
     .max(8)
@@ -84,6 +84,8 @@ export const adListQuerySchema = z.object({
   category: z.string().trim().max(120).optional(),
   schedule: z.string().trim().max(120).optional(),
   experience: z.string().trim().max(120).optional(),
+  priceFrom: z.coerce.number().nonnegative().optional(),
+  priceTo: z.coerce.number().nonnegative().optional(),
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20)
 });

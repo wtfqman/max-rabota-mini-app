@@ -19,7 +19,7 @@ export const createVacancySchema = z.object({
   salaryTo: z.coerce.number().nonnegative().optional(),
   salaryPeriod: z.enum(['HOUR', 'DAY', 'WEEK', 'MONTH', 'PROJECT']).optional(),
   isSalaryNegotiable: z.boolean().optional(),
-  description: z.string().trim().min(20).max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   requirements: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
   responsibilities: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
   benefits: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
@@ -57,7 +57,7 @@ export const createVacancySchema = z.object({
         altText: z.string().trim().max(255).optional()
       })
     )
-    .max(8)
+    .max(9)
     .default([])
 });
 

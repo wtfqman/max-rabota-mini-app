@@ -1,4 +1,5 @@
-import type { PublicAdCard, PublicVacancyDetail, VacancyListMeta } from '../vacancies/vacancy.types.js';
+﻿import type { PublicAdCard, PublicVacancyDetail, VacancyListMeta } from '../vacancies/vacancy.types.js';
+import type { PublicationSettings } from './publication-settings.js';
 
 export type PublicAdType = 'vacancy' | 'resume' | 'equipment' | 'material' | 'tool';
 export type PublicAdStatus =
@@ -8,7 +9,8 @@ export type PublicAdStatus =
   | 'rejected'
   | 'published'
   | 'hidden'
-  | 'archived';
+  | 'archived'
+  | 'deleted';
 
 export interface PublicResumeDetail extends PublicAdCard {
   type: 'resume';
@@ -78,11 +80,22 @@ export interface OwnedAdCard extends PublicAdCard {
   status: PublicAdStatus;
   updatedAt: string;
   moderationReason: string | null;
+  publicationSettings: PublicationSettings | null;
 }
 
 export interface MyAdsQuery {
   type?: PublicAdType;
   status?: PublicAdStatus;
+  q?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export type ModerationQueueStatus = PublicAdStatus | 'test';
+
+export interface ModerationQueueQuery {
+  type?: PublicAdType;
+  status?: ModerationQueueStatus;
   q?: string;
   page?: number;
   perPage?: number;
@@ -122,6 +135,20 @@ export interface UserProfilePayload {
   };
 }
 
+export interface TeamUser {
+  id: string;
+  maxUserId: string;
+  maxUsername: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  displayName: string | null;
+  role: 'user' | 'moderator' | 'admin';
+  status: 'active' | 'blocked' | 'deleted';
+  createdAt: string;
+  lastSeenAt: string | null;
+  adsTotal: number;
+}
+
 export interface ReviewItem {
   id: string;
   author: {
@@ -132,6 +159,11 @@ export interface ReviewItem {
   rating: number;
   text: string | null;
   adId: string | null;
+  ad: {
+    id: string;
+    title: string;
+    type: string;
+  } | null;
   createdAt: string;
 }
 
@@ -142,7 +174,22 @@ export interface ModerationActionResponse {
     logId?: string;
     reason?: string;
     error?: string;
+    mediaStrategy?: string;
   };
+  channelRemoval?: ChannelRemovalResult;
+}
+
+export interface ChannelRemovalResult {
+  attempted: number;
+  removed: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface AdLifecycleActionResponse {
+  ad: PublicAdDetail;
+  channelRemoval?: ChannelRemovalResult;
 }
 
 export type ListMeta = VacancyListMeta;
+

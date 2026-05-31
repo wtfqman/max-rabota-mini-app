@@ -1,170 +1,124 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "public";
-
--- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('USER', 'MODERATOR', 'ADMIN');
-
--- CreateEnum
-CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'BLOCKED', 'DELETED');
-
--- CreateEnum
-CREATE TYPE "AdType" AS ENUM ('VACANCY', 'RESUME', 'EQUIPMENT', 'MATERIAL', 'TOOL');
-
--- CreateEnum
-CREATE TYPE "AdStatus" AS ENUM ('DRAFT', 'PENDING_MODERATION', 'APPROVED', 'REJECTED', 'PUBLISHED', 'HIDDEN', 'ARCHIVED');
-
--- CreateEnum
-CREATE TYPE "EmploymentType" AS ENUM ('FULL_TIME', 'PART_TIME', 'CONTRACT', 'SHIFT', 'INTERNSHIP', 'TEMPORARY');
-
--- CreateEnum
-CREATE TYPE "WorkFormat" AS ENUM ('ONSITE', 'REMOTE', 'HYBRID', 'FIELD');
-
--- CreateEnum
-CREATE TYPE "SalaryPeriod" AS ENUM ('HOUR', 'DAY', 'WEEK', 'MONTH', 'PROJECT');
-
--- CreateEnum
-CREATE TYPE "EquipmentCondition" AS ENUM ('NEW', 'USED', 'REFURBISHED');
-
--- CreateEnum
-CREATE TYPE "AdContactType" AS ENUM ('MAX', 'PHONE', 'EMAIL', 'WEBSITE', 'OTHER');
-
--- CreateEnum
-CREATE TYPE "ModerationAction" AS ENUM ('SUBMITTED', 'APPROVED', 'REJECTED', 'HIDDEN', 'RETURNED', 'ARCHIVED', 'RESTORED', 'AUTO_FLAGGED');
-
--- CreateEnum
-CREATE TYPE "ReviewStatus" AS ENUM ('PENDING', 'PUBLISHED', 'HIDDEN', 'DELETED');
-
--- CreateEnum
-CREATE TYPE "ChannelPublishStatus" AS ENUM ('PENDING', 'PUBLISHED', 'FAILED', 'SKIPPED');
-
 -- CreateTable
 CREATE TABLE "users" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "max_user_id" TEXT NOT NULL,
     "max_username" TEXT,
     "first_name" TEXT,
     "last_name" TEXT,
     "display_name" TEXT,
     "locale" TEXT,
-    "role" "UserRole" NOT NULL DEFAULT 'USER',
-    "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
-    "started_at" TIMESTAMP(3),
-    "last_seen_at" TIMESTAMP(3),
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+    "role" TEXT NOT NULL DEFAULT 'USER',
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "started_at" DATETIME,
+    "last_seen_at" DATETIME,
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "user_profiles" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" TEXT NOT NULL,
     "city" TEXT,
     "district_text" TEXT,
     "about" TEXT,
     "avatar_url" TEXT,
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "user_profiles_pkey" PRIMARY KEY ("id")
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "user_profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ads" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "owner_id" TEXT NOT NULL,
-    "type" "AdType" NOT NULL,
-    "status" "AdStatus" NOT NULL DEFAULT 'PENDING_MODERATION',
+    "type" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'PENDING_MODERATION',
     "title" TEXT NOT NULL,
     "description" TEXT,
     "city" TEXT,
     "district_text" TEXT,
     "category_text" TEXT,
-    "location_lat" DOUBLE PRECISION,
-    "location_lon" DOUBLE PRECISION,
-    "price_amount" DOUBLE PRECISION,
+    "location_lat" REAL,
+    "location_lon" REAL,
+    "price_amount" REAL,
     "currency" TEXT NOT NULL DEFAULT 'RUB',
     "metadata_json" TEXT,
-    "moderated_at" TIMESTAMP(3),
-    "published_at" TIMESTAMP(3),
-    "hidden_at" TIMESTAMP(3),
-    "archived_at" TIMESTAMP(3),
-    "expires_at" TIMESTAMP(3),
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ads_pkey" PRIMARY KEY ("id")
+    "moderated_at" DATETIME,
+    "published_at" DATETIME,
+    "hidden_at" DATETIME,
+    "archived_at" DATETIME,
+    "expires_at" DATETIME,
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ads_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "vacancy_details" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "company_name" TEXT,
     "position" TEXT,
-    "employment_type" "EmploymentType",
-    "work_format" "WorkFormat",
-    "salary_from" DOUBLE PRECISION,
-    "salary_to" DOUBLE PRECISION,
+    "employment_type" TEXT,
+    "work_format" TEXT,
+    "salary_from" REAL,
+    "salary_to" REAL,
     "salary_currency" TEXT NOT NULL DEFAULT 'RUB',
-    "salary_period" "SalaryPeriod",
+    "salary_period" TEXT,
     "is_salary_negotiable" BOOLEAN NOT NULL DEFAULT false,
     "schedule" TEXT,
     "experience" TEXT,
     "education" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "vacancy_details_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "vacancy_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "resume_details" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "desired_position" TEXT,
     "experience_years" INTEGER,
-    "employment_type" "EmploymentType",
-    "work_format" "WorkFormat",
-    "expected_salary" DOUBLE PRECISION,
+    "employment_type" TEXT,
+    "work_format" TEXT,
+    "expected_salary" REAL,
     "salary_currency" TEXT NOT NULL DEFAULT 'RUB',
     "skills_json" TEXT,
     "education" TEXT,
     "availability" TEXT,
     "portfolio_url" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "resume_details_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "resume_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "equipment_details" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "category_text" TEXT,
-    "condition" "EquipmentCondition",
+    "condition" TEXT,
     "brand" TEXT,
     "model" TEXT,
     "production_year" INTEGER,
-    "rental_price" DOUBLE PRECISION,
-    "sale_price" DOUBLE PRECISION,
-    "deposit_amount" DOUBLE PRECISION,
+    "rental_price" REAL,
+    "sale_price" REAL,
+    "deposit_amount" REAL,
     "currency" TEXT NOT NULL DEFAULT 'RUB',
     "availability" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "equipment_details_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "equipment_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ad_photos" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "storage_key" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -175,43 +129,39 @@ CREATE TABLE "ad_photos" (
     "height" INTEGER,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
     "alt_text" TEXT,
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ad_photos_pkey" PRIMARY KEY ("id")
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ad_photos_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ad_contacts" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
-    "type" "AdContactType" NOT NULL,
+    "type" TEXT NOT NULL,
     "label" TEXT,
     "value" TEXT NOT NULL,
     "is_preferred" BOOLEAN NOT NULL DEFAULT false,
     "is_public" BOOLEAN NOT NULL DEFAULT true,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ad_contacts_pkey" PRIMARY KEY ("id")
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ad_contacts_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "metro_stations" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "city" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "line_name" TEXT,
     "line_color" TEXT,
     "external_code" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "metro_stations_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL
 );
 
 -- CreateTable
@@ -220,115 +170,114 @@ CREATE TABLE "vacancy_metro_stations" (
     "metro_station_id" TEXT NOT NULL,
     "walking_minutes" INTEGER,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "vacancy_metro_stations_pkey" PRIMARY KEY ("vacancy_details_id","metro_station_id")
+    PRIMARY KEY ("vacancy_details_id", "metro_station_id"),
+    CONSTRAINT "vacancy_metro_stations_vacancy_details_id_fkey" FOREIGN KEY ("vacancy_details_id") REFERENCES "vacancy_details" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "vacancy_metro_stations_metro_station_id_fkey" FOREIGN KEY ("metro_station_id") REFERENCES "metro_stations" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ad_requirements" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "text" TEXT NOT NULL,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ad_requirements_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ad_requirements_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ad_responsibilities" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "text" TEXT NOT NULL,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ad_responsibilities_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ad_responsibilities_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "ad_benefits" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "text" TEXT NOT NULL,
     "sort_order" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "ad_benefits_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "ad_benefits_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "favorites" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "user_id" TEXT NOT NULL,
     "ad_id" TEXT NOT NULL,
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "favorites_pkey" PRIMARY KEY ("id")
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "favorites_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "favorites_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "reviews" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "author_id" TEXT NOT NULL,
     "subject_id" TEXT NOT NULL,
     "ad_id" TEXT,
     "rating" INTEGER NOT NULL,
     "text" TEXT,
-    "status" "ReviewStatus" NOT NULL DEFAULT 'PENDING',
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
     "moderation_reason" TEXT,
-    "published_at" TIMESTAMP(3),
-    "moderated_at" TIMESTAMP(3),
-    "deleted_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "reviews_pkey" PRIMARY KEY ("id")
+    "published_at" DATETIME,
+    "moderated_at" DATETIME,
+    "deleted_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "reviews_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "reviews_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "reviews_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "moderation_logs" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "moderator_id" TEXT,
-    "action" "ModerationAction" NOT NULL,
-    "status_from" "AdStatus",
-    "status_to" "AdStatus",
+    "action" TEXT NOT NULL,
+    "status_from" TEXT,
+    "status_to" TEXT,
     "reason" TEXT,
     "comment" TEXT,
     "metadata_json" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "moderation_logs_pkey" PRIMARY KEY ("id")
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "moderation_logs_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "moderation_logs_moderator_id_fkey" FOREIGN KEY ("moderator_id") REFERENCES "users" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "channel_publish_logs" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "ad_id" TEXT NOT NULL,
     "channel_id" TEXT,
     "channel_url" TEXT,
     "max_chat_id" TEXT,
     "max_message_id" TEXT,
     "max_message_url" TEXT,
-    "status" "ChannelPublishStatus" NOT NULL DEFAULT 'PENDING',
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
     "attempt" INTEGER NOT NULL DEFAULT 1,
     "error_code" TEXT,
     "error_message" TEXT,
     "payload_json" TEXT,
     "published_text" TEXT,
-    "scheduled_at" TIMESTAMP(3),
-    "published_at" TIMESTAMP(3),
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "channel_publish_logs_pkey" PRIMARY KEY ("id")
+    "scheduled_at" DATETIME,
+    "published_at" DATETIME,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL,
+    CONSTRAINT "channel_publish_logs_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateIndex
@@ -543,63 +492,3 @@ CREATE INDEX "channel_publish_logs_max_chat_id_idx" ON "channel_publish_logs"("m
 
 -- CreateIndex
 CREATE INDEX "channel_publish_logs_published_at_idx" ON "channel_publish_logs"("published_at");
-
--- AddForeignKey
-ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ads" ADD CONSTRAINT "ads_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "vacancy_details" ADD CONSTRAINT "vacancy_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "resume_details" ADD CONSTRAINT "resume_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "equipment_details" ADD CONSTRAINT "equipment_details_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ad_photos" ADD CONSTRAINT "ad_photos_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ad_contacts" ADD CONSTRAINT "ad_contacts_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "vacancy_metro_stations" ADD CONSTRAINT "vacancy_metro_stations_vacancy_details_id_fkey" FOREIGN KEY ("vacancy_details_id") REFERENCES "vacancy_details"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "vacancy_metro_stations" ADD CONSTRAINT "vacancy_metro_stations_metro_station_id_fkey" FOREIGN KEY ("metro_station_id") REFERENCES "metro_stations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ad_requirements" ADD CONSTRAINT "ad_requirements_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ad_responsibilities" ADD CONSTRAINT "ad_responsibilities_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ad_benefits" ADD CONSTRAINT "ad_benefits_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "favorites" ADD CONSTRAINT "favorites_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "favorites" ADD CONSTRAINT "favorites_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "reviews" ADD CONSTRAINT "reviews_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "reviews" ADD CONSTRAINT "reviews_subject_id_fkey" FOREIGN KEY ("subject_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "reviews" ADD CONSTRAINT "reviews_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "moderation_logs" ADD CONSTRAINT "moderation_logs_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "moderation_logs" ADD CONSTRAINT "moderation_logs_moderator_id_fkey" FOREIGN KEY ("moderator_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "channel_publish_logs" ADD CONSTRAINT "channel_publish_logs_ad_id_fkey" FOREIGN KEY ("ad_id") REFERENCES "ads"("id") ON DELETE CASCADE ON UPDATE CASCADE;

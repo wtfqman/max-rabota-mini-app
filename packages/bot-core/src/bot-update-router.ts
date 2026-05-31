@@ -24,6 +24,11 @@ export class BotUpdateRouter {
           await this.startHandler.handleStartMessage(update);
           return;
         }
+
+        if (text && /^\/id(?:@\w+)?(?:\s|$)/i.test(text)) {
+          await this.startHandler.handleIdMessage(update);
+          return;
+        }
       }
 
       logger.debug({ updateType: update.update_type }, 'Update skipped');

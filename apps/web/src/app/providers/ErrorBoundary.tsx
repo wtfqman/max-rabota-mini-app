@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+﻿import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { FullscreenState } from '../../shared/ui/FullscreenState.js';
 
 interface ErrorBoundaryProps {
@@ -22,14 +22,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error(error, errorInfo);
   }
 
+  private retry = () => {
+    this.setState({ hasError: false });
+  };
+
   render() {
     if (this.state.hasError) {
       return (
         <FullscreenState
           title="Что-то пошло не так"
-          description="Обновите экран и попробуйте снова"
-          actionLabel="Обновить"
-          onAction={() => window.location.reload()}
+          description="Мы сохранили приложение открытым. Вернитесь назад или попробуйте повторить действие."
+          actionLabel="Попробовать снова"
+          onAction={this.retry}
         />
       );
     }

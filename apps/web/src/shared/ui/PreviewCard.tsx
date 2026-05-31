@@ -1,4 +1,4 @@
-import { Eye } from 'lucide-react';
+﻿import { Eye } from 'lucide-react';
 import { SectionCard } from './SectionCard.js';
 import { StatChip } from './StatChip.js';
 

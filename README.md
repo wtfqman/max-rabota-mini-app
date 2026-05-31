@@ -79,9 +79,10 @@ npm run deploy:check
 
 ## Important Environment Variables
 
-- `DATABASE_URL` - PostgreSQL connection.
+- `DATABASE_URL` - SQLite database URL, for example `file:./dev.db`.
 - `MAX_BOT_TOKEN` - MAX bot token.
 - `MAX_CHANNEL_CHAT_ID` - MAX channel chat id used for publishing approved ads.
+- `MAX_MINI_APP_WEB_APP` - optional MAX mini app launch value for `open_app` buttons, for example bot public name or `https://max.ru/<botName>?startapp`.
 - `CHANNEL_URL` - public channel URL shown in bot/UI.
 - `APP_URL` - public application origin, `https://app.rabst24.ru` in production.
 - `WEB_APP_URL` - public mini app origin, `https://app.rabst24.ru` in production.
@@ -110,6 +111,7 @@ See `.env.example` for local development and `.env.production.example` for `app.
 - Production frontend values: `VITE_APP_URL=https://app.rabst24.ru` and `VITE_API_BASE_URL=https://app.rabst24.ru/api`.
 - Production backend values: `APP_URL=https://app.rabst24.ru`, `WEB_APP_URL=https://app.rabst24.ru`, `API_PUBLIC_URL=https://app.rabst24.ru/api`, `CORS_ORIGIN=https://app.rabst24.ru`.
 - Production bot value: `MINI_APP_URL=https://app.rabst24.ru`.
+- Optional MAX open-app button value: `MAX_MINI_APP_WEB_APP=https://max.ru/<botName>?startapp` after the mini app is connected in MAX Partner. Leave it empty to use a regular link button to `MINI_APP_URL`.
 - Serve the API and mini app through HTTPS before final MAX production launch.
 - Nginx template: `deploy/nginx/app.rabst24.ru.conf`.
 - PM2 template: `deploy/pm2/ecosystem.config.cjs`.

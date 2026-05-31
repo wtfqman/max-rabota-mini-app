@@ -17,7 +17,7 @@ export function AppBootstrap({ children }: AppBootstrapProps) {
   }, [initialize]);
 
   if (initStatus === 'idle' || initStatus === 'loading') {
-    return <FullscreenState title="Открываем Rabst24" description="Подготавливаем вакансии, объявления и ваш профиль." />;
+    return <FullscreenState title="Открываем приложение" description="Подготавливаем вакансии, объявления и ваш профиль." />;
   }
 
   if (initStatus === 'error') {

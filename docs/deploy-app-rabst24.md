@@ -24,6 +24,7 @@ cp .env.production.example .env
 - `MAX_WEBHOOK_SECRET`
 - `SESSION_SECRET`
 - `MAX_CHANNEL_CHAT_ID`, если канал уже известен
+- `MAX_MINI_APP_WEB_APP`, если мини-приложение уже подключено в MAX Partner и есть ссылка вида `https://max.ru/<botName>?startapp`
 - `CHANNEL_URL`, если нужна кнопка канала
 
 3. До подключения SSL оставьте:
@@ -35,6 +36,7 @@ WEB_APP_URL=https://app.rabst24.ru
 API_PUBLIC_URL=https://app.rabst24.ru/api
 CORS_ORIGIN=https://app.rabst24.ru
 MINI_APP_URL=https://app.rabst24.ru
+MAX_MINI_APP_WEB_APP=
 VITE_APP_URL=https://app.rabst24.ru
 VITE_API_BASE_URL=https://app.rabst24.ru/api
 HTTPS_ENABLED=false

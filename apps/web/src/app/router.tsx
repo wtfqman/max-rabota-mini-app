@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+﻿import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from './layout/AppShell.js';
 import { AdDetailsPage } from '../pages/AdDetailsPage.js';
 import { CatalogFeedPage } from '../pages/CatalogFeedPage.js';
@@ -15,6 +15,7 @@ import { NotFoundPage } from '../pages/NotFoundPage.js';
 import { ProfilePage } from '../pages/ProfilePage.js';
 import { ResumesPage } from '../pages/ResumesPage.js';
 import { ReviewsPage } from '../pages/ReviewsPage.js';
+import { TeamPage } from '../pages/TeamPage.js';
 import { VacanciesPage } from '../pages/VacanciesPage.js';
 import { VacancyDetailsPage } from '../pages/VacancyDetailsPage.js';
 import { appEnv } from '../shared/config/app-env.js';
@@ -111,6 +112,10 @@ export const router = createBrowserRouter([
       {
         path: 'reviews',
         element: <ReviewsPage />
+      },
+      {
+        path: 'team',
+        element: <TeamPage />
       },
       {
         path: 'moderation',

@@ -47,6 +47,30 @@ export function createModerationRouter(container: ApiContainer): Router {
     validateRequest({ params: moderationAdParamSchema, body: hideAdSchema }),
     controller.hide
   );
+  router.post(
+    '/ads/:adId/unpublish',
+    adminOnly,
+    validateRequest({ params: moderationAdParamSchema, body: hideAdSchema }),
+    controller.unpublish
+  );
+  router.post(
+    '/ads/:adId/archive',
+    adminOnly,
+    validateRequest({ params: moderationAdParamSchema, body: hideAdSchema }),
+    controller.archive
+  );
+  router.delete(
+    '/ads/:adId',
+    adminOnly,
+    validateRequest({ params: moderationAdParamSchema, body: hideAdSchema }),
+    controller.delete
+  );
+  router.post(
+    '/ads/:adId/remove-channel',
+    adminOnly,
+    validateRequest({ params: moderationAdParamSchema }),
+    controller.removeFromChannel
+  );
   router.get('/logs', adminOnly, validateRequest({ query: paginationQuerySchema }), controller.logs);
 
   return router;

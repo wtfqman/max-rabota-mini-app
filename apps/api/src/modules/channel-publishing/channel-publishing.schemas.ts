@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { paginationQuerySchema } from '@rabst24/shared';
 import { adIdParamSchema } from '../../shared/http/params.schemas.js';
 
+const appIdSchema = z.string().trim().min(1).max(80).regex(/^[a-z0-9_-]+$/i);
+
 export const publishAdParamSchema = adIdParamSchema;
 
 export const publishAdSchema = z.object({
@@ -9,8 +11,8 @@ export const publishAdSchema = z.object({
 });
 
 export const publishLogsQuerySchema = paginationQuerySchema.extend({
-  adId: z.string().uuid().optional(),
-  status: z.enum(['pending', 'published', 'failed', 'skipped']).optional()
+  adId: appIdSchema.optional(),
+  status: z.enum(['pending', 'published', 'failed', 'skipped', 'removed', 'remove_failed']).optional()
 });
 
 export type PublishAdDto = z.infer<typeof publishAdSchema>;

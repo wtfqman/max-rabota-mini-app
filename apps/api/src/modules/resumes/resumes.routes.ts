@@ -11,7 +11,7 @@ import { ResumesService } from './resumes.service.js';
 export function createResumesRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new ResumesRepository(container.db);
-  const service = new ResumesService(repository, container.adService);
+  const service = new ResumesService(repository, container.adService, container.moderationNotificationService);
   const controller = new ResumesController(service);
 
   router.get('/status', controller.status);

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { RefreshCw, SearchX } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { VacancyFiltersDrawer, type VacancyFiltersState } from '../features/vacancies/VacancyFiltersDrawer.js';
+import { AdFiltersDrawer, type AdFiltersState } from '../features/ads/AdFiltersDrawer.js';
 import type { PublicAdCard, VacancyListMeta } from '../features/vacancies/vacancy.types.js';
+import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
@@ -22,14 +23,21 @@ export function VacanciesPage() {
   const filterKey = useMemo(() => buildFilterKey(filters), [filters]);
   const [searchValue, setSearchValue] = useState(filters.q);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterNotice, setFilterNotice] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   const [ads, setAds] = useState<PublicAdCard[]>([]);
   const [meta, setMeta] = useState<VacancyListMeta | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'loadingMore' | 'ready' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const accessToken = useAppStore((state) => state.accessToken);
 
   useEffect(() => {
+    if (!accessToken) {
+      setFavoriteIds(new Set());
+      return;
+    }
+
     apiClient
       .listFavorites()
       .then((response) => {
@@ -38,11 +46,20 @@ export function VacanciesPage() {
       .catch(() => {
         setFavoriteIds(new Set());
       });
-  }, []);
+  }, [accessToken]);
 
   useEffect(() => {
     setSearchValue(filters.q);
   }, [filters.q]);
+
+  useEffect(() => {
+    if (!filterNotice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setFilterNotice(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [filterNotice]);
 
   useEffect(() => {
     let isActive = true;
@@ -56,8 +73,9 @@ export function VacanciesPage() {
         q: filters.q,
         category: filters.category,
         district: filters.district,
-        schedule: filters.schedule,
         experience: filters.experience,
+        priceFrom: filters.priceFrom,
+        priceTo: filters.priceTo,
         page,
         perPage: PER_PAGE
       })
@@ -84,7 +102,13 @@ export function VacanciesPage() {
     };
   }, [filterKey, page, reloadKey]);
 
-  const activeFilterCount = [filters.category, filters.district, filters.schedule, filters.experience].filter(Boolean).length;
+  const activeFilterCount = [
+    filters.category,
+    filters.district,
+    filters.experience,
+    filters.priceFrom,
+    filters.priceTo
+  ].filter(Boolean).length;
   const hasMore = Boolean(meta && meta.page < meta.totalPages);
   const isInitialLoading = status === 'loading' && ads.length === 0;
   const isLoadingMore = status === 'loadingMore';
@@ -104,8 +128,10 @@ export function VacanciesPage() {
     writeParam(next, 'q', merged.q);
     writeParam(next, 'category', merged.category);
     writeParam(next, 'district', merged.district);
-    writeParam(next, 'schedule', merged.schedule);
+    next.delete('schedule');
     writeParam(next, 'experience', merged.experience);
+    writeParam(next, 'priceFrom', merged.priceFrom);
+    writeParam(next, 'priceTo', merged.priceTo);
     next.set('page', '1');
     setSearchParams(next);
   };
@@ -118,10 +144,15 @@ export function VacanciesPage() {
 
   const resetFilters = () => {
     setFiltersOpen(false);
+    setFilterNotice('Фильтры сброшены');
     setSearchParams(new URLSearchParams());
   };
 
   const toggleFavorite = (adId: string) => {
+    if (!accessToken) {
+      return;
+    }
+
     setFavoriteIds((current) => {
       const next = new Set(current);
       if (next.has(adId)) {
@@ -137,11 +168,10 @@ export function VacanciesPage() {
 
   return (
     <AppPage>
-      <section className="space-y-3 app-fade-up">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold uppercase text-accent-green">Rabst24</p>
-          <h1 className="text-3xl font-black text-text-primary">Вакансии</h1>
-          <p className="text-base leading-6 text-text-secondary">
+      <section className="app-surface app-topline space-y-3 rounded-panel p-3 app-fade-up">
+        <div className="space-y-1.5">
+          <h1 className="text-2xl font-black text-text-primary">Вакансии</h1>
+          <p className="text-sm leading-5 text-text-secondary">
             Подбирайте работу по графику, району и опыту. Всё лишнее скрыто, остаётся только полезное.
           </p>
         </div>
@@ -158,7 +188,7 @@ export function VacanciesPage() {
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <button
             type="button"
-            className="min-h-12 rounded-panel border border-white/8 bg-surface-850/92 px-4 text-left text-sm font-semibold text-text-secondary transition hover:border-accent-green/35 hover:text-text-primary"
+            className="min-h-11 rounded-panel border border-white/10 bg-surface-900/92 px-3 text-left text-sm font-bold text-text-secondary transition hover:border-accent-green/45 hover:text-text-primary"
             onClick={() => applyQuery({ q: '' })}
           >
             {filters.q ? `Ищем: ${filters.q}` : meta ? `Найдено вакансий: ${meta.total}` : 'Свежая выдача'}
@@ -171,13 +201,19 @@ export function VacanciesPage() {
         </div>
 
         <ActiveFilterChips filters={filters} onClear={(key) => applyQuery({ [key]: '' })} />
+
+        {filterNotice ? (
+          <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">
+            {filterNotice}
+          </p>
+        ) : null}
       </section>
 
       {isInitialLoading ? (
-        <section className="space-y-3" aria-label="Загрузка вакансий">
-          <AdCardSkeleton />
-          <AdCardSkeleton />
-          <AdCardSkeleton />
+        <section className="grid grid-cols-2 gap-2.5" aria-label="Загрузка вакансий">
+          <AdCardSkeleton variant="grid" />
+          <AdCardSkeleton variant="grid" />
+          <AdCardSkeleton variant="grid" />
         </section>
       ) : null}
 
@@ -206,15 +242,17 @@ export function VacanciesPage() {
       ) : null}
 
       {ads.length > 0 ? (
-        <section className="space-y-3" aria-label="Список вакансий">
+        <section className="grid grid-cols-2 gap-2.5" aria-label="Список вакансий">
           {ads.map((ad) => (
             <AdCard
               key={ad.id}
+              variant="grid"
               to={`/vacancies/${ad.id}`}
               typeLabel="Вакансия"
               title={ad.title}
               subtitle={ad.subtitle}
               coverImageUrl={ad.coverPhoto?.previewUrl ?? ad.coverPhoto?.url}
+              coverMimeType={ad.coverPhoto?.mimeType}
               location={ad.locationShort}
               price={ad.shortSalary ?? undefined}
               category={ad.category}
@@ -230,7 +268,7 @@ export function VacanciesPage() {
       {ads.length > 0 ? (
         <div className="grid gap-3">
           {status === 'error' ? (
-            <div className="rounded-panel border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold text-accent-green">
               Не всё обновилось с первого раза. Попробуйте загрузить вакансии ещё раз.
             </div>
           ) : null}
@@ -244,13 +282,15 @@ export function VacanciesPage() {
         </div>
       ) : null}
 
-      <VacancyFiltersDrawer
+      <AdFiltersDrawer
         open={filtersOpen}
+        kind="vacancy"
         filters={filters}
         onClose={() => setFiltersOpen(false)}
         onReset={resetFilters}
-        onApply={(nextFilters: VacancyFiltersState) => {
+        onApply={(nextFilters: AdFiltersState) => {
           setFiltersOpen(false);
+          setFilterNotice('Фильтры применены');
           applyQuery(nextFilters);
         }}
       />
@@ -268,8 +308,9 @@ function ActiveFilterChips({
   const chips = [
     { key: 'category', label: filters.category },
     { key: 'district', label: filters.district },
-    { key: 'schedule', label: filters.schedule },
-    { key: 'experience', label: filters.experience }
+    { key: 'experience', label: filters.experience },
+    { key: 'priceFrom', label: filters.priceFrom ? `от ${formatMoney(filters.priceFrom)} ₽` : '' },
+    { key: 'priceTo', label: filters.priceTo ? `до ${formatMoney(filters.priceTo)} ₽` : '' }
   ].filter((chip) => chip.label);
 
   if (chips.length === 0) {
@@ -292,8 +333,10 @@ function readFilters(searchParams: URLSearchParams) {
     q: searchParams.get('q') ?? '',
     category: searchParams.get('category') ?? '',
     district: searchParams.get('district') ?? '',
-    schedule: searchParams.get('schedule') ?? '',
-    experience: searchParams.get('experience') ?? ''
+    schedule: '',
+    experience: searchParams.get('experience') ?? '',
+    priceFrom: searchParams.get('priceFrom') ?? '',
+    priceTo: searchParams.get('priceTo') ?? ''
   };
 }
 
@@ -311,7 +354,18 @@ function writeParam(params: URLSearchParams, key: string, value: string): void {
 }
 
 function buildFilterKey(filters: ReturnType<typeof readFilters>): string {
-  return [filters.q, filters.category, filters.district, filters.schedule, filters.experience].join('|');
+  return [
+    filters.q,
+    filters.category,
+    filters.district,
+    filters.experience,
+    filters.priceFrom,
+    filters.priceTo
+  ].join('|');
+}
+
+function formatMoney(value: string): string {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 function mergeAds(current: PublicAdCard[], next: PublicAdCard[]): PublicAdCard[] {

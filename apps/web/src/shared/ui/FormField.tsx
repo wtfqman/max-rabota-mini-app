@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
+﻿import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
 
 interface FieldShellProps {
   label: string;
@@ -18,7 +18,7 @@ export function TextInput({ label, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <FieldShell label={label}>
       <input
-        className="min-h-12 rounded-panel border border-line bg-surface-900 px-3 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-green"
+        className="min-h-11 rounded-panel border border-line bg-surface-900 px-3 text-text-primary outline-none placeholder:text-text-muted focus:border-accent-green"
         {...props}
       />
     </FieldShell>

@@ -16,6 +16,7 @@ export function createBotContainer() {
 
   const startHandler = new StartHandler(userService, maxApiClient, {
     miniAppUrl: config.miniAppUrl,
+    miniAppWebApp: config.max.miniAppWebApp,
     channelUrl: config.channelUrl
   });
   const botUpdateRouter = new BotUpdateRouter(startHandler);

@@ -23,12 +23,12 @@ const adContactInputSchema = z.object({
 export const createProductPayloadSchema = z.object({
   title: z.string().trim().min(3, 'Укажите название').max(180),
   categoryText: z.string().trim().max(120).optional(),
-  description: z.string().trim().min(10, 'Добавьте короткое описание').max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   priceAmount: z.coerce.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   contacts: z.array(adContactInputSchema).min(1, 'Добавьте контакт').max(8),
-  photos: z.array(adPhotoInputSchema).max(8).default([])
+  photos: z.array(adPhotoInputSchema).max(9).default([])
 });
 
 export type CreateProductPayload = z.infer<typeof createProductPayloadSchema>;

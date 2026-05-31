@@ -6,7 +6,8 @@ export const AD_STATUSES = [
   'rejected',
   'published',
   'hidden',
-  'archived'
+  'archived',
+  'deleted'
 ] as const;
 
 export type AdTypeCode = (typeof AD_TYPES)[number];

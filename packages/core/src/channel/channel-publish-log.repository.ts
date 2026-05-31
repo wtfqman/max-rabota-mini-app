@@ -15,6 +15,8 @@ export class ChannelPublishLogRepository {
     maxChatId?: string | null;
     payload?: Prisma.InputJsonValue;
     publishedText?: string | null;
+    mediaStrategy?: string | null;
+    mediaAttachment?: Prisma.InputJsonValue | null;
   }): Promise<ChannelPublishLog> {
     return this.db.channelPublishLog.create({
       data: {
@@ -24,6 +26,8 @@ export class ChannelPublishLogRepository {
         maxChatId: data.maxChatId,
         payloadJson: data.payload ? JSON.stringify(data.payload) : undefined,
         publishedText: data.publishedText,
+        mediaStrategy: data.mediaStrategy,
+        mediaAttachmentJson: data.mediaAttachment ? JSON.stringify(data.mediaAttachment) : undefined,
         status: ChannelPublishStatus.PENDING
       }
     });
@@ -57,6 +61,48 @@ export class ChannelPublishLogRepository {
       data: {
         status: ChannelPublishStatus.FAILED,
         errorMessage
+      }
+    });
+  }
+
+  async listPublishedForAd(adId: string): Promise<ChannelPublishLog[]> {
+    return this.db.channelPublishLog.findMany({
+      where: {
+        adId,
+        status: {
+          in: [ChannelPublishStatus.PUBLISHED, ChannelPublishStatus.REMOVE_FAILED]
+        },
+        maxMessageId: {
+          not: null
+        }
+      },
+      orderBy: {
+        publishedAt: 'desc'
+      }
+    });
+  }
+
+  async markRemoved(id: string): Promise<ChannelPublishLog> {
+    return this.db.channelPublishLog.update({
+      where: {
+        id
+      },
+      data: {
+        status: ChannelPublishStatus.REMOVED,
+        removedAt: new Date(),
+        removeErrorMessage: null
+      }
+    });
+  }
+
+  async markRemoveFailed(id: string, errorMessage: string): Promise<ChannelPublishLog> {
+    return this.db.channelPublishLog.update({
+      where: {
+        id
+      },
+      data: {
+        status: ChannelPublishStatus.REMOVE_FAILED,
+        removeErrorMessage: errorMessage
       }
     });
   }

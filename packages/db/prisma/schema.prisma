@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -35,6 +35,7 @@ enum AdStatus {
   PUBLISHED
   HIDDEN
   ARCHIVED
+  DELETED
 }
 
 enum EmploymentType {
@@ -80,8 +81,11 @@ enum ModerationAction {
   APPROVED
   REJECTED
   HIDDEN
+  UNPUBLISHED
   RETURNED
   ARCHIVED
+  DELETED
+  CHANNEL_REMOVED
   RESTORED
   AUTO_FLAGGED
 }
@@ -98,6 +102,8 @@ enum ChannelPublishStatus {
   PUBLISHED
   FAILED
   SKIPPED
+  REMOVED
+  REMOVE_FAILED
 }
 
 model User {
@@ -165,6 +171,7 @@ model Ad {
   priceAmount        Float?    @map("price_amount")
   currency           String    @default("RUB")
   metadataJson       String?   @map("metadata_json")
+  isTest             Boolean   @default(false) @map("is_test")
   moderatedAt        DateTime? @map("moderated_at")
   publishedAt        DateTime? @map("published_at")
   hiddenAt           DateTime? @map("hidden_at")
@@ -196,6 +203,7 @@ model Ad {
   @@index([city])
   @@index([districtText])
   @@index([categoryText])
+  @@index([isTest])
   @@index([publishedAt])
   @@index([deletedAt])
   @@map("ads")
@@ -288,6 +296,11 @@ model AdPhoto {
   sizeBytes   Int?      @map("size_bytes")
   width       Int?
   height      Int?
+  maxMediaToken String?   @map("max_media_token")
+  maxMediaType  String?   @map("max_media_type")
+  maxMediaStrategy String? @map("max_media_strategy")
+  maxMediaPayloadJson String? @map("max_media_payload_json")
+  maxMediaUploadedAt DateTime? @map("max_media_uploaded_at")
   sortOrder   Int       @default(0) @map("sort_order")
   altText     String?   @map("alt_text")
   deletedAt   DateTime? @map("deleted_at")
@@ -297,6 +310,7 @@ model AdPhoto {
   ad          Ad        @relation(fields: [adId], references: [id], onDelete: Cascade)
 
   @@index([adId, sortOrder])
+  @@index([maxMediaToken])
   @@index([deletedAt])
   @@map("ad_photos")
 }
@@ -485,6 +499,10 @@ model ChannelPublishLog {
   errorMessage   String?              @map("error_message")
   payloadJson    String?              @map("payload_json")
   publishedText  String?              @map("published_text")
+  mediaStrategy  String?              @map("media_strategy")
+  mediaAttachmentJson String?         @map("media_attachment_json")
+  removedAt      DateTime?            @map("removed_at")
+  removeErrorMessage String?          @map("remove_error_message")
   scheduledAt    DateTime?            @map("scheduled_at")
   publishedAt    DateTime?            @map("published_at")
   createdAt      DateTime             @default(now()) @map("created_at")

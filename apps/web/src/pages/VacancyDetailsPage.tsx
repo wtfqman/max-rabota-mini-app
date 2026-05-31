@@ -13,14 +13,17 @@ import {
 } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import type { PublicAdContact, PublicVacancyDetail } from '../features/vacancies/vacancy.types.js';
+import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AdCardSkeleton } from '../shared/ui/AdCard.js';
 import { AppPage } from '../shared/ui/AppPage.js';
 import { EmptyState } from '../shared/ui/EmptyState.js';
+import { MediaPreview } from '../shared/ui/MediaPreview.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { StatChip } from '../shared/ui/StatChip.js';
+import { ReviewsBlock } from '../features/reviews/ReviewsBlock.js';
 
 export function VacancyDetailsPage() {
   const { adId } = useParams();
@@ -29,9 +32,16 @@ export function VacancyDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
+  const accessToken = useAppStore((state) => state.accessToken);
+  const [favoriteNotice, setFavoriteNotice] = useState<string | null>(null);
   const [shareLabel, setShareLabel] = useState('Поделиться');
 
   useEffect(() => {
+    if (!accessToken) {
+      setIsFavorite(false);
+      return;
+    }
+
     apiClient
       .listFavorites()
       .then((response) => {
@@ -40,7 +50,7 @@ export function VacancyDetailsPage() {
       .catch(() => {
         setIsFavorite(false);
       });
-  }, [adId]);
+  }, [accessToken, adId]);
 
   useEffect(() => {
     if (!adId) {
@@ -77,7 +87,7 @@ export function VacancyDetailsPage() {
     };
   }, [adId, reloadKey]);
 
-  const heroPhoto = vacancy?.photos[0] ?? vacancy?.coverPhoto ?? null;
+  const heroPhoto = vacancy?.coverPhoto ?? vacancy?.photos[0] ?? null;
   const facts = useMemo(() => (vacancy ? buildFacts(vacancy) : []), [vacancy]);
 
   const handleShare = async () => {
@@ -88,7 +98,7 @@ export function VacancyDetailsPage() {
     const url = window.location.href;
     const shareData = {
       title: vacancy.title,
-      text: vacancy.subtitle ?? 'Вакансия в Rabst24',
+      text: vacancy.subtitle ?? 'Вакансия в MAX',
       url
     };
     const maybeNavigator = navigator as Navigator & {
@@ -110,12 +120,18 @@ export function VacancyDetailsPage() {
   };
 
   const toggleFavorite = async () => {
+    if (!accessToken) {
+      setFavoriteNotice('Лайки и отзывы доступны после входа через MAX mini app.');
+      return;
+    }
+
     if (!vacancy) {
       return;
     }
 
     const previous = isFavorite;
     setIsFavorite(!previous);
+    setFavoriteNotice(null);
 
     try {
       if (previous) {
@@ -125,6 +141,39 @@ export function VacancyDetailsPage() {
       }
     } catch {
       setIsFavorite(previous);
+      setFavoriteNotice('Не удалось обновить избранное. Попробуйте ещё раз.');
+    }
+  };
+
+  const handleContact = async () => {
+    if (!vacancy) {
+      return;
+    }
+
+    const contact = getPrimaryContact(vacancy.contacts);
+
+    if (!contact) {
+      if (vacancy.owner.maxUsername) {
+        window.location.href = getMaxProfileHref(vacancy.owner.maxUsername);
+        return;
+      }
+
+      setFavoriteNotice('\u041a\u043e\u043d\u0442\u0430\u043a\u0442\u044b \u043f\u043e\u043a\u0430 \u043d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u044b.');
+      return;
+    }
+
+    const href = getContactHref(contact);
+
+    if (href !== '#') {
+      window.location.href = href;
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(contact.value);
+      setFavoriteNotice('\u041a\u043e\u043d\u0442\u0430\u043a\u0442 \u0441\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d.');
+    } catch {
+      setFavoriteNotice(contact.value);
     }
   };
 
@@ -168,48 +217,54 @@ export function VacancyDetailsPage() {
         К вакансиям
       </Link>
 
-      <section className="overflow-hidden rounded-panel border border-white/8 bg-[linear-gradient(180deg,rgba(16,23,20,0.98),rgba(10,15,13,0.98))] shadow-glow app-fade-up">
-        <div className="relative aspect-[4/3] bg-surface-800">
-          {heroPhoto ? (
-            <img
-              src={heroPhoto.url}
-              alt={heroPhoto.altText ?? vacancy.title}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(52,211,153,0.22),transparent_32%),linear-gradient(135deg,#101719,#050708)] text-accent-green">
-              <BriefcaseBusiness size={54} />
+      <section className="app-surface app-topline relative overflow-hidden rounded-panel p-4 shadow-glow app-fade-up">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-accent-green/12 blur-3xl" />
+        <div className="relative space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-panel border border-accent-green/25 bg-accent-greenSoft text-accent-green">
+              <BriefcaseBusiness size={23} />
             </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-surface-950/90 to-transparent" />
-          <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
-            <StatChip label="Вакансия" tone="green" />
-            <StatChip label="Проверено" tone="cyan" icon={<ShieldCheck size={15} />} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <StatChip label="Вакансия" tone="green" />
+              <StatChip label="Проверено" tone="green" icon={<ShieldCheck size={15} />} />
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-4 p-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-black leading-tight text-text-primary">{vacancy.title}</h1>
+          <div className="space-y-3">
+            <h1 className="text-3xl font-black leading-tight tracking-normal text-text-primary">{vacancy.title}</h1>
             {vacancy.subtitle ? (
-              <p className="flex items-center gap-2 text-base font-semibold text-text-secondary">
-                <Building2 size={18} className="text-accent-green" />
+              <p className="flex items-center gap-2 text-sm font-semibold text-text-secondary">
+                <Building2 size={18} className="shrink-0 text-accent-green" />
                 {vacancy.subtitle}
               </p>
             ) : null}
             {vacancy.shortSalary ? <p className="text-2xl font-black text-accent-green">{vacancy.shortSalary}</p> : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {facts.map((fact) => (
-              <div key={fact.label} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
-                <p className="text-xs font-semibold uppercase text-text-muted">{fact.label}</p>
-                <p className="mt-1 text-sm font-bold text-text-primary">{fact.value}</p>
-              </div>
-            ))}
-          </div>
+          {facts.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {facts.map((fact) => (
+                <div key={fact.label} className="rounded-panel border border-white/10 bg-black/[0.18] p-3">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-text-muted">{fact.label}</p>
+                  <p className="mt-1 text-sm font-extrabold leading-tight text-text-primary">{fact.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
+
+      {favoriteNotice ? (
+        <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold text-accent-green">
+          {favoriteNotice}
+        </p>
+      ) : null}
+
+      {vacancy.photos.length > 0 || heroPhoto ? (
+        <SectionCard title="Медиа" description="Все фото и видео из объявления. Первое фото используется как обложка.">
+          <VacancyMediaGallery media={vacancy.photos.length > 0 ? vacancy.photos : heroPhoto ? [heroPhoto] : []} title={vacancy.title} />
+        </SectionCard>
+      ) : null}
 
       {vacancy.vacancy.metroStations.length > 0 ? (
         <SectionCard title="Метро">
@@ -252,16 +307,20 @@ export function VacancyDetailsPage() {
               <a
                 key={contact.id}
                 href={getContactHref(contact)}
-                className="flex items-center justify-between gap-3 rounded-panel border border-white/8 bg-surface-900/92 p-3 transition hover:border-accent-green/35"
+                className="flex flex-col items-start gap-3 rounded-panel border border-white/8 bg-surface-900/92 p-3 transition hover:border-accent-green/35 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex w-full min-w-0 items-center gap-3">
                   <Phone size={18} className="shrink-0 text-accent-green" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-text-primary">{contact.label ?? contact.type.toUpperCase()}</p>
-                    <p className="truncate text-sm text-text-secondary">{contact.value}</p>
+                    <p className="break-words text-sm text-text-secondary">{contact.value}</p>
                   </div>
                 </div>
-                {contact.isPreferred ? <StatChip label="Основной" tone="green" /> : null}
+                {contact.isPreferred ? (
+                  <span className="shrink-0">
+                    <StatChip label="Основной" tone="green" />
+                  </span>
+                ) : null}
               </a>
             ))}
           </div>
@@ -270,12 +329,20 @@ export function VacancyDetailsPage() {
         )}
       </SectionCard>
 
+      <ReviewsBlock subjectUserId={vacancy.owner.id} adId={vacancy.id} adTitle={vacancy.title} />
+
       <div className="text-center text-sm text-text-muted">
         Опубликовано {formatDate(vacancy.publishedAt ?? vacancy.createdAt)}
       </div>
 
-      <div className="sticky bottom-20 z-10 grid grid-cols-[1fr_auto_auto] gap-2">
-        <ActionButton icon={<Send size={18} />}>Связаться</ActionButton>
+      <div className="fixed bottom-[calc(92px+env(safe-area-inset-bottom))] left-1/2 z-30 grid w-[calc(100%-32px)] max-w-xl -translate-x-1/2 grid-cols-[1fr_auto_auto] gap-2 rounded-[22px] border border-white/10 bg-surface-950/88 p-2 shadow-[0_-16px_46px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+        <ActionButton
+          icon={<Send size={18} />}
+          onClick={() => void handleContact()}
+          disabled={!vacancy.contacts.length && !vacancy.owner.maxUsername}
+        >
+          Связаться
+        </ActionButton>
         <ActionButton
           variant="secondary"
           aria-label={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
@@ -285,6 +352,27 @@ export function VacancyDetailsPage() {
         <ActionButton variant="secondary" aria-label={shareLabel} icon={<Share2 size={19} />} onClick={handleShare} />
       </div>
     </AppPage>
+  );
+}
+
+function getPrimaryContact(contacts: PublicAdContact[]): PublicAdContact | null {
+  return contacts.find((contact) => contact.isPreferred) ?? contacts[0] ?? null;
+}
+
+function VacancyMediaGallery({ media, title }: { media: PublicVacancyDetail['photos']; title: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {media.map((item) => (
+        <div key={item.id} className="h-40 overflow-hidden rounded-[18px] border border-white/10 bg-surface-900">
+          <MediaPreview
+            src={item.previewUrl ?? item.url}
+            mimeType={item.mimeType}
+            alt={item.altText ?? title}
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -309,27 +397,40 @@ function TextListSection({ title, items }: { title: string; items: string[] }) {
 
 function buildFacts(vacancy: PublicVacancyDetail) {
   return [
-    { label: 'Локация', value: vacancy.locationShort },
-    { label: 'Категория', value: vacancy.category },
-    { label: 'График', value: vacancy.vacancy.schedule },
-    { label: 'Опыт', value: vacancy.vacancy.experience }
+    { label: 'Локация', value: vacancy.locationShort }
   ].filter((fact): fact is { label: string; value: string } => Boolean(fact.value));
 }
 
 function getContactHref(contact: PublicAdContact): string {
-  if (contact.type === 'phone') {
-    return `tel:${contact.value.replace(/[^\d+]/g, '')}`;
+  const value = contact.value.trim();
+  const type = contact.type.toLowerCase();
+
+  if (!value) {
+    return '#';
   }
 
-  if (contact.type === 'email') {
-    return `mailto:${contact.value}`;
+  if (type === 'phone') {
+    return `tel:${value.replace(/[^\d+]/g, '')}`;
   }
 
-  if (contact.type === 'website') {
-    return contact.value.startsWith('http') ? contact.value : `https://${contact.value}`;
+  if (type === 'email') {
+    return `mailto:${value}`;
+  }
+
+  if (type === 'website') {
+    return value.startsWith('http') ? value : `https://${value}`;
+  }
+
+  if (type === 'max' || value.startsWith('@')) {
+    return getMaxProfileHref(value);
   }
 
   return '#';
+}
+
+function getMaxProfileHref(value: string): string {
+  const username = value.replace(/^@/, '').trim();
+  return username ? `https://max.ru/${encodeURIComponent(username)}` : '#';
 }
 
 function formatDate(value: string): string {
@@ -339,3 +440,4 @@ function formatDate(value: string): string {
     year: 'numeric'
   }).format(new Date(value));
 }
+

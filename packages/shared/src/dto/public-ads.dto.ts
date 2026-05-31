@@ -4,6 +4,7 @@ export interface PublicAdPhotoDto {
   id: string;
   url: string;
   previewUrl: string | null;
+  mimeType: string | null;
   altText: string | null;
   width: number | null;
   height: number | null;

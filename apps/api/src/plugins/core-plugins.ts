@@ -15,9 +15,13 @@ export function registerCorePlugins(app: Express): void {
       contentSecurityPolicy: {
         directives: {
           'img-src': ["'self'", 'data:', 'blob:'],
+          'media-src': ["'self'", 'data:', 'blob:'],
+          'script-src': ["'self'", 'https://st.max.ru'],
+          'frame-ancestors': ["'self'", 'https://max.ru', 'https://*.max.ru'],
           'upgrade-insecure-requests': config.httpsEnabled ? [] : null
         }
       },
+      frameguard: false,
       hsts: config.httpsEnabled
     })
   );
@@ -27,7 +31,7 @@ export function registerCorePlugins(app: Express): void {
       credentials: true
     })
   );
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '100mb' }));
   app.use(
     pinoHttp({
       logger,

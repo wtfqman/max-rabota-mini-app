@@ -2,6 +2,7 @@ export interface PublicAdPhoto {
   id: string;
   url: string;
   previewUrl: string | null;
+  mimeType: string | null;
   altText: string | null;
   width: number | null;
   height: number | null;
@@ -53,6 +54,8 @@ export interface VacancyListQuery {
   district?: string;
   schedule?: string;
   experience?: string;
+  priceFrom?: string;
+  priceTo?: string;
   page?: number;
   perPage?: number;
 }

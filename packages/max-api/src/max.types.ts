@@ -32,6 +32,7 @@ export interface MaxMessage {
   recipient?: MaxRecipient;
   timestamp?: number;
   body?: {
+    mid?: string | null;
     text?: string | null;
     attachments?: MaxAttachment[] | null;
   } | null;
@@ -68,7 +69,7 @@ export interface MaxInlineKeyboardAttachment {
   };
 }
 
-export type MaxAttachment = MaxInlineKeyboardAttachment | Record<string, unknown>;
+export type MaxAttachment = MaxInlineKeyboardAttachment | MaxMediaAttachment | Record<string, unknown>;
 
 export interface MaxBaseUpdate {
   update_type: string;
@@ -116,6 +117,21 @@ export interface MaxSendMessageParams {
   chatId?: MaxId;
   body: MaxMessageBody;
   disableLinkPreview?: boolean;
+}
+
+export type MaxUploadType = 'image' | 'video' | 'audio' | 'file';
+
+export interface MaxUploadIntent {
+  url: string;
+  token?: string | null;
+}
+
+export interface MaxMediaAttachment {
+  type: 'image' | 'video' | 'audio' | 'file';
+  payload: {
+    token: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface MaxCreateSubscriptionParams {

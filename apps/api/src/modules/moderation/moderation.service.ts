@@ -56,9 +56,52 @@ export class ModerationModuleService extends FoundationService {
 
   async hide(adId: string, moderatorId: string, reason?: string) {
     await this.moderationService.hideAd(adId, moderatorId, reason);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
 
     return {
-      ad: await this.adService.getAdDetails(adId)
+      ad: await this.adService.getAdDetails(adId),
+      channelRemoval
+    };
+  }
+
+  async unpublish(adId: string, moderatorId: string, reason?: string) {
+    await this.moderationService.unpublishAd(adId, moderatorId, reason);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
+
+    return {
+      ad: await this.adService.getAdDetails(adId),
+      channelRemoval
+    };
+  }
+
+  async archive(adId: string, moderatorId: string, reason?: string) {
+    await this.moderationService.archiveAd(adId, moderatorId, reason);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
+
+    return {
+      ad: await this.adService.getAdDetails(adId),
+      channelRemoval
+    };
+  }
+
+  async delete(adId: string, moderatorId: string, reason?: string) {
+    await this.moderationService.deleteAd(adId, moderatorId, reason);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
+
+    return {
+      ad: await this.adService.getAdDetails(adId),
+      channelRemoval
+    };
+  }
+
+  async removeFromChannel(adId: string, moderatorId: string) {
+    await this.moderationService.logChannelRemoved(adId, moderatorId, 'Снятие публикации из канала');
+    const ad = await this.adService.getAdDetails(adId);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
+
+    return {
+      ad,
+      channelRemoval
     };
   }
 
@@ -94,7 +137,8 @@ export class ModerationModuleService extends FoundationService {
 
       return {
         status: 'published' as const,
-        logId: result.logId
+        logId: result.logId,
+        mediaStrategy: result.mediaStrategy
       };
     } catch (error) {
       logger.error({ err: error, adId: ad.id }, 'Channel publication after moderation failed');

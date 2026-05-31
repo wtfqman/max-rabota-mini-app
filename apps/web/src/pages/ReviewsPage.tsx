@@ -1,134 +1,129 @@
-import { useEffect, useState } from 'react';
-import { RefreshCw, Star } from 'lucide-react';
+﻿import { useEffect, useMemo, useState } from 'react';
+import { Loader2, RefreshCw, Star } from 'lucide-react';
+import type { ReviewItem } from '../features/ads/ad.types.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AppPage } from '../shared/ui/AppPage.js';
 import { EmptyState } from '../shared/ui/EmptyState.js';
-import { Input } from '../shared/ui/Input.js';
-import { LoadingState } from '../shared/ui/LoadingState.js';
+import { LinkButton } from '../shared/ui/LinkButton.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
-import { StatChip } from '../shared/ui/StatChip.js';
-import { Textarea } from '../shared/ui/Textarea.js';
-import type { ReviewItem } from '../features/ads/ad.types.js';
 
 export function ReviewsPage() {
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [targetUserId, setTargetUserId] = useState('');
-  const [rating, setRating] = useState('5');
-  const [text, setText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const average = useMemo(() => getAverageRating(reviews), [reviews]);
 
-  useEffect(() => {
-    let active = true;
+  const loadReviews = () => {
     setStatus('loading');
     setError(null);
 
     apiClient
       .listMyReviews()
       .then((response) => {
-        if (!active) {
-          return;
-        }
         setReviews(response.data);
         setStatus('ready');
       })
       .catch((requestError: unknown) => {
-        if (!active) {
-          return;
-        }
         setError(getUserFacingError(requestError, 'reviews_load'));
         setStatus('error');
       });
-
-    return () => {
-      active = false;
-    };
-  }, [reloadKey]);
-
-  const average = reviews.length
-    ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
-    : '0.0';
-
-  const submit = async () => {
-    if (!targetUserId.trim()) {
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await apiClient.createReview(targetUserId.trim(), {
-        rating: Number(rating) || 5,
-        text: text.trim() || undefined
-      });
-      setTargetUserId('');
-      setRating('5');
-      setText('');
-      setReloadKey((value) => value + 1);
-    } finally {
-      setSubmitting(false);
-    }
   };
 
-  return (
-    <AppPage>
-      <div className="space-y-2 app-fade-up">
-        <h1 className="text-3xl font-black text-text-primary">Отзывы</h1>
-        <p className="text-base leading-6 text-text-secondary">Здесь собирается обратная связь о работе и взаимодействии.</p>
-      </div>
+  useEffect(() => {
+    loadReviews();
+  }, []);
 
-      <SectionCard title="Рейтинг">
-        <div className="flex flex-wrap gap-2">
-          <StatChip label="средний" value={average} tone="amber" icon={<Star size={15} />} />
-          <StatChip label="отзывов" value={String(reviews.length)} />
-        </div>
-      </SectionCard>
+  if (status === 'loading') {
+    return (
+      <AppPage>
+        <SectionCard title="Отзывы" description="Здесь собраны отзывы, которые оставили вам по опубликованным объявлениям.">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text-secondary">
+            <Loader2 className="animate-spin text-accent-green" size={18} />
+            Загружаем отзывы...
+          </div>
+        </SectionCard>
+      </AppPage>
+    );
+  }
 
-      <SectionCard title="Оставить отзыв" description="Пока отзыв можно отправить по ID пользователя из его профиля.">
-        <Input label="ID пользователя" value={targetUserId} onChange={(event) => setTargetUserId(event.target.value)} />
-        <Input label="Оценка" inputMode="numeric" value={rating} onChange={(event) => setRating(event.target.value)} />
-        <Textarea label="Текст" value={text} onChange={(event) => setText(event.target.value)} />
-        <ActionButton disabled={submitting || !targetUserId.trim()} onClick={() => void submit()}>
-          {submitting ? 'Отправляем...' : 'Отправить отзыв'}
-        </ActionButton>
-      </SectionCard>
-
-      {status === 'loading' ? <LoadingState /> : null}
-
-      {status === 'error' ? (
+  if (status === 'error') {
+    return (
+      <AppPage>
         <EmptyState
           title="Не удалось загрузить отзывы"
-          description={error ?? 'Попробуйте открыть раздел ещё раз.'}
+          description={error ?? 'Попробуйте обновить раздел ещё раз.'}
           action={
-            <ActionButton icon={<RefreshCw size={18} />} onClick={() => setReloadKey((value) => value + 1)}>
+            <ActionButton icon={<RefreshCw size={18} />} onClick={loadReviews}>
               Обновить
             </ActionButton>
           }
         />
-      ) : null}
+      </AppPage>
+    );
+  }
 
-      {status === 'ready' && reviews.length === 0 ? (
-        <EmptyState title="Отзывов пока нет" description="Когда появится обратная связь, она отобразится здесь." />
-      ) : null}
+  if (reviews.length === 0) {
+    return (
+      <AppPage>
+        <EmptyState
+          title="Отзывов пока нет"
+          description="Отзывы появляются после того, как другой пользователь откроет опубликованное объявление и оставит оценку владельцу. Самому себе отзыв оставить нельзя."
+          action={
+            <LinkButton to="/my-ads" variant="secondary">
+              Мои объявления
+            </LinkButton>
+          }
+        />
+      </AppPage>
+    );
+  }
 
-      {status === 'ready' && reviews.length > 0 ? (
-        <section className="space-y-3">
-          {reviews.map((review) => (
-            <SectionCard key={review.id} title={review.author.displayName ?? review.author.maxUsername ?? 'Пользователь'}>
-              <div className="grid gap-2">
-                <StatChip label="оценка" value={String(review.rating)} tone="amber" icon={<Star size={15} />} />
-                {review.text ? <p className="text-base leading-6 text-text-secondary">{review.text}</p> : null}
-                <p className="text-sm text-text-muted">{formatDate(review.createdAt)}</p>
-              </div>
-            </SectionCard>
-          ))}
-        </section>
-      ) : null}
+  return (
+    <AppPage>
+      <SectionCard title="Отзывы" description="Отзывы привязаны к объявлениям и защищены от дублей.">
+        <div className="grid gap-4">
+          <div className="flex items-center justify-between rounded-panel border border-white/8 bg-surface-900/92 p-3">
+            <div>
+              <p className="text-sm font-bold text-text-primary">Ваш рейтинг</p>
+              <p className="text-xs text-text-muted">{reviews.length} отзыв(ов)</p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-accent-greenSoft px-3 py-2 text-sm font-black text-accent-green">
+              <Star size={16} className="fill-accent-green" />
+              {average ? average.toFixed(1) : '0.0'}
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            {reviews.map((review) => (
+              <article key={review.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-text-primary">{review.author.displayName ?? review.author.maxUsername ?? 'Пользователь'}</p>
+                    {review.ad ? <p className="truncate text-xs text-text-muted">{review.ad.title}</p> : null}
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-1 text-xs font-black text-accent-green">
+                    <Star size={13} className="fill-accent-green" /> {review.rating}
+                  </span>
+                </div>
+                {review.text ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-text-secondary">{review.text}</p> : null}
+                <p className="mt-3 text-xs text-text-muted">{formatDate(review.createdAt)}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </SectionCard>
     </AppPage>
   );
+}
+
+function getAverageRating(reviews: ReviewItem[]): number | null {
+  if (!reviews.length) {
+    return null;
+  }
+
+  return reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
 }
 
 function formatDate(value: string): string {

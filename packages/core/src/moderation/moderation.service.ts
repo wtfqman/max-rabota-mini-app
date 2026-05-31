@@ -70,6 +70,69 @@ export class ModerationService {
     return updatedAd;
   }
 
+  async unpublishAd(adId: string, moderatorId: string, reason?: string): Promise<Ad> {
+    const ad = await this.requireAd(adId);
+    const updatedAd = await this.adRepository.updateStatus(adId, AdStatus.HIDDEN);
+
+    await this.moderationLogRepository.create({
+      adId,
+      moderatorId,
+      action: ModerationAction.UNPUBLISHED,
+      statusFrom: ad.status,
+      statusTo: AdStatus.HIDDEN,
+      reason
+    });
+
+    return updatedAd;
+  }
+
+  async archiveAd(adId: string, moderatorId: string, reason?: string): Promise<Ad> {
+    const ad = await this.requireAd(adId);
+    const updatedAd = await this.adRepository.updateStatus(adId, AdStatus.ARCHIVED);
+
+    await this.moderationLogRepository.create({
+      adId,
+      moderatorId,
+      action: ModerationAction.ARCHIVED,
+      statusFrom: ad.status,
+      statusTo: AdStatus.ARCHIVED,
+      reason
+    });
+
+    return updatedAd;
+  }
+
+  async deleteAd(adId: string, moderatorId: string, reason?: string): Promise<Ad> {
+    const ad = await this.requireAd(adId);
+    const updatedAd = await this.adRepository.updateStatus(adId, AdStatus.DELETED);
+
+    await this.moderationLogRepository.create({
+      adId,
+      moderatorId,
+      action: ModerationAction.DELETED,
+      statusFrom: ad.status,
+      statusTo: AdStatus.DELETED,
+      reason
+    });
+
+    return updatedAd;
+  }
+
+  async logChannelRemoved(adId: string, moderatorId: string, reason?: string): Promise<Ad> {
+    const ad = await this.requireAd(adId);
+
+    await this.moderationLogRepository.create({
+      adId,
+      moderatorId,
+      action: ModerationAction.CHANNEL_REMOVED,
+      statusFrom: ad.status,
+      statusTo: ad.status,
+      reason
+    });
+
+    return ad;
+  }
+
   private async requireAd(adId: string): Promise<Ad> {
     const ad = await this.adRepository.findById(adId);
 

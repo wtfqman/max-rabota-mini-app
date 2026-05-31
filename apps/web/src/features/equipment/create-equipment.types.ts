@@ -7,7 +7,7 @@ export const createEquipmentPayloadSchema = z.object({
   title: z.string().trim().min(3, 'Укажите название техники').max(180),
   categoryText: z.string().trim().min(2, 'Укажите категорию техники').max(120),
   equipmentGroupText: z.string().trim().max(120).optional(),
-  description: z.string().trim().min(20, 'Добавьте описание от 20 символов').max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   contacts: z
@@ -32,7 +32,7 @@ export const createEquipmentPayloadSchema = z.object({
         altText: z.string().optional()
       })
     )
-    .max(8)
+    .max(9)
 });
 
 export type CreateEquipmentPayload = z.infer<typeof createEquipmentPayloadSchema>;

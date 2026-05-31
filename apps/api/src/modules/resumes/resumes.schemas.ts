@@ -10,7 +10,7 @@ export const resumeListQuerySchema = adListQuerySchema.omit({
 export const createResumeSchema = z.object({
   name: z.string().trim().min(2).max(180),
   profession: z.string().trim().min(2).max(180),
-  description: z.string().trim().min(20).max(4000),
+  description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   experienceText: z.string().trim().min(2).max(1200),
   expectedSalary: z.coerce.number().nonnegative().optional(),
   districtText: z.string().trim().max(120).optional(),
@@ -40,7 +40,7 @@ export const createResumeSchema = z.object({
         altText: z.string().trim().max(255).optional()
       })
     )
-    .max(1)
+    .max(9)
     .default([])
 });
 

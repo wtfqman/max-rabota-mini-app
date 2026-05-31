@@ -1,17 +1,22 @@
 import type { ErrorRequestHandler } from 'express';
+import { logger } from '@rabst24/config';
 import { AppError } from '@rabst24/shared';
 import { ZodError } from 'zod';
 
 export const errorMiddleware: ErrorRequestHandler = (error, request, response, next) => {
   void next;
-  request.log.error(
-    {
-      error,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      details: error instanceof AppError ? error.details : undefined
-    },
-    'Unhandled HTTP error'
-  );
+  const requestLogger = request.log ?? logger;
+
+  if (shouldLogAsServerError(error)) {
+    requestLogger.error(
+      {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        details: error instanceof AppError ? error.details : undefined
+      },
+      'Unhandled HTTP error'
+    );
+  }
 
   if (error instanceof AppError) {
     response.status(error.statusCode).json({
@@ -39,3 +44,15 @@ export const errorMiddleware: ErrorRequestHandler = (error, request, response, n
     }
   });
 };
+
+function shouldLogAsServerError(error: unknown): boolean {
+  if (error instanceof AppError) {
+    return error.statusCode >= 500;
+  }
+
+  if (error instanceof ZodError) {
+    return false;
+  }
+
+  return true;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type InputHTMLAttributes } from 'react';
+﻿import { useEffect, useId, useState, type InputHTMLAttributes } from 'react';
 
 interface SuggestionInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -45,7 +45,7 @@ export function SuggestionInput({
 
   return (
     <div className="grid gap-2">
-      <label htmlFor={inputId} className="text-sm font-semibold text-text-secondary">
+      <label htmlFor={inputId} className="text-xs font-extrabold uppercase tracking-[0.08em] text-text-secondary">
         {label}
       </label>
       <input
@@ -53,8 +53,8 @@ export function SuggestionInput({
         list={listId}
         value={value}
         onChange={onChange}
-        className={`min-h-12 rounded-panel border bg-surface-900/92 px-3 text-base text-text-primary outline-none placeholder:text-text-muted transition focus:border-accent-green ${
-          error ? 'border-red-400/50 bg-red-500/5' : 'border-white/8'
+        className={`min-h-[52px] rounded-panel border bg-surface-900/92 px-4 text-base font-semibold text-text-primary outline-none placeholder:font-normal placeholder:text-text-muted transition focus:border-accent-green focus:bg-surface-850 focus:shadow-[0_0_0_3px_rgba(52,211,153,0.12)] ${
+          error ? 'border-red-400/50 bg-red-500/5' : 'border-white/10'
         }`}
         {...props}
       />

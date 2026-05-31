@@ -54,7 +54,60 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad)
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  unpublish = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const moderatorId = this.requireModeratorId(request);
+    const result = await this.moderationService.unpublish(
+      request.params.adId,
+      moderatorId,
+      (request.body as { reason?: string }).reason
+    );
+
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  archive = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const moderatorId = this.requireModeratorId(request);
+    const result = await this.moderationService.archive(
+      request.params.adId,
+      moderatorId,
+      (request.body as { reason?: string }).reason
+    );
+
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  delete = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const moderatorId = this.requireModeratorId(request);
+    const result = await this.moderationService.delete(
+      request.params.adId,
+      moderatorId,
+      (request.body as { reason?: string }).reason
+    );
+
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
+    });
+  });
+
+  removeFromChannel = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const moderatorId = this.requireModeratorId(request);
+    const result = await this.moderationService.removeFromChannel(request.params.adId, moderatorId);
+
+    sendOk(response, {
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
     });
   });
 

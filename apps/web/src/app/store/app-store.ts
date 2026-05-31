@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import type {
   AuthPlatform,
   AuthProfile,
@@ -64,6 +64,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const launchContext = getLaunchContext();
+    notifyMaxAppReady();
+
     set({
       initStatus: 'loading',
       initError: null,
@@ -110,7 +112,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       }
 
-      notifyMaxAppReady();
       set({ initStatus: 'ready' });
     } catch (error) {
       setApiAccessToken(null);
@@ -122,5 +123,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
     }
   },
-  resetError: () => set({ initError: null, initStatus: 'idle' })
+  resetError: () => {
+    set({ initError: null, initStatus: 'idle' });
+    void get().initialize();
+  }
 }));

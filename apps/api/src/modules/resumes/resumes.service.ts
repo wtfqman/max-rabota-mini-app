@@ -6,13 +6,15 @@ import {
   type CreateAdDto
 } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
+import type { ModerationNotificationService } from '../moderation/moderation-notification.service.js';
 import type { CreateResumeDto } from './resumes.schemas.js';
 import type { ResumesRepository } from './resumes.repository.js';
 
 export class ResumesService extends FoundationService {
   constructor(
     repository: ResumesRepository,
-    private readonly coreAdService: CoreAdService
+    private readonly coreAdService: CoreAdService,
+    private readonly moderationNotificationService: ModerationNotificationService
   ) {
     super(repository);
   }
@@ -51,6 +53,9 @@ export class ResumesService extends FoundationService {
       }
     };
 
-    return this.coreAdService.createAdForModeration(ownerId, createDto);
+    const ad = await this.coreAdService.createAdForModeration(ownerId, createDto);
+    void this.moderationNotificationService.notifyNewAd(ad, ownerId);
+
+    return ad;
   }
 }
