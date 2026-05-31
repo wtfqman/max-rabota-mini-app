@@ -9,6 +9,7 @@ import {
   Radio,
   ShieldCheck,
   Trash2,
+  UserRound,
   XCircle
 } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
@@ -42,6 +43,15 @@ const moderationContactText = {
   contact: '\u041a\u043e\u043d\u0442\u0430\u043a\u0442',
   phone: '\u0422\u0435\u043b\u0435\u0444\u043e\u043d',
   preferred: '\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439'
+};
+
+const moderationAccountText = {
+  title: '\u0410\u043a\u043a\u0430\u0443\u043d\u0442 \u0430\u0432\u0442\u043e\u0440\u0430',
+  name: '\u0418\u043c\u044f',
+  maxId: 'MAX ID',
+  username: 'MAX username',
+  internalId: '\u0412\u043d\u0443\u0442\u0440\u0435\u043d\u043d\u0438\u0439 ID',
+  noUsername: '\u0411\u0435\u0437 username'
 };
 
 export function ModerationPage() {
@@ -300,6 +310,7 @@ export function ModerationPage() {
                     </span>
                   ) : null}
                 </div>
+                <ModerationAccountBlock owner={selected.owner} />
                 <ModerationContactBlock contacts={selected.contacts} />
                 {selected.description ? (
                   <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{selected.description}</p>
@@ -375,6 +386,37 @@ export function ModerationPage() {
         </div>
       ) : null}
     </AppPage>
+  );
+}
+
+function ModerationAccountBlock({ owner }: { owner: PublicAdDetail['owner'] }) {
+  const fullName = [owner.firstName, owner.lastName].filter(Boolean).join(' ').trim();
+  const username = owner.maxUsername?.trim();
+  const displayUsername = username ? (username.startsWith('@') ? username : `@${username}`) : moderationAccountText.noUsername;
+  const displayName = owner.displayName?.trim() || fullName || username || `MAX ${owner.maxUserId}`;
+
+  return (
+    <div className="grid gap-2 rounded-panel border border-white/10 bg-surface-900/80 p-3">
+      <div className="flex items-center gap-2 text-sm font-extrabold text-text-primary">
+        <UserRound size={16} className="shrink-0 text-accent-green" />
+        {moderationAccountText.title}
+      </div>
+      <div className="grid gap-2">
+        <ModerationInfoRow label={moderationAccountText.name} value={displayName} />
+        <ModerationInfoRow label={moderationAccountText.maxId} value={owner.maxUserId} />
+        <ModerationInfoRow label={moderationAccountText.username} value={displayUsername} />
+        <ModerationInfoRow label={moderationAccountText.internalId} value={owner.id} />
+      </div>
+    </div>
+  );
+}
+
+function ModerationInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid min-w-0 grid-cols-[92px_1fr] gap-2 rounded-panel border border-white/8 bg-black/[0.14] px-3 py-2 text-sm">
+      <span className="text-text-muted">{label}</span>
+      <span className="min-w-0 break-words font-bold text-text-primary">{value}</span>
+    </div>
   );
 }
 

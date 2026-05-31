@@ -58,8 +58,11 @@ export interface PublicAdBaseDetailDto extends PublicAdCardDto {
   contacts: PublicAdContactDto[];
   owner: {
     id: string;
+    maxUserId: string;
     displayName: string | null;
     maxUsername: string | null;
+    firstName: string | null;
+    lastName: string | null;
   };
   updatedAt: string;
 }

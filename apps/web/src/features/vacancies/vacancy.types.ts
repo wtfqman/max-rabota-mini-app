@@ -77,8 +77,11 @@ export interface PublicVacancyDetail extends PublicAdCard {
   contacts: PublicAdContact[];
   owner: {
     id: string;
+    maxUserId: string;
     displayName: string | null;
     maxUsername: string | null;
+    firstName: string | null;
+    lastName: string | null;
   };
   updatedAt: string;
   vacancy: {

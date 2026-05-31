@@ -145,8 +145,11 @@ function serializeBaseDetail(ad: PublicAdRecord): PublicAdBaseDetailDto {
     contacts: ad.contacts.map(serializeContact),
     owner: {
       id: ad.owner.id,
+      maxUserId: ad.owner.maxUserId,
       displayName: ad.owner.displayName,
-      maxUsername: ad.owner.maxUsername
+      maxUsername: ad.owner.maxUsername,
+      firstName: ad.owner.firstName,
+      lastName: ad.owner.lastName
     },
     updatedAt: ad.updatedAt.toISOString()
   };
