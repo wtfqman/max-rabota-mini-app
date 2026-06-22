@@ -149,6 +149,10 @@ export function ModerationPage() {
         return `Объявление одобрено, но публикация в канал не прошла: ${publication.error ?? 'ошибка отправки'}.`;
       }
 
+      if (publication?.status === 'skipped') {
+        return 'Объявление одобрено. Повторная публикация в канал пропущена защитой от дубля или из-за смены статуса.';
+      }
+
       return 'Объявление одобрено.';
     });
 
@@ -159,8 +163,8 @@ export function ModerationPage() {
     }
 
     void runAction(`reject-${adId}`, async () => {
-      await apiClient.rejectModerationAd(adId, reason.trim());
-      return 'Объявление отклонено.';
+      const response = await apiClient.rejectModerationAd(adId, reason.trim());
+      return `Объявление отклонено.${formatChannelRemoval(response.data.channelRemoval)}`;
     });
   };
 
@@ -199,13 +203,13 @@ export function ModerationPage() {
   };
 
   const removeFromChannel = (adId: string) => {
-    if (!window.confirm('Снять пост объявления из канала? Само объявление в приложении останется в текущем статусе.')) {
+    if (!window.confirm('Снять пост объявления из канала и выключить автопубликацию? Само объявление в приложении останется в текущем статусе.')) {
       return;
     }
 
     void runAction(`remove-channel-${adId}`, async () => {
       const response = await apiClient.removeModerationAdFromChannel(adId);
-      return `Проверили публикации в канале.${formatChannelRemoval(response.data.channelRemoval)}`;
+      return `Проверили публикации в канале и выключили автопубликацию.${formatChannelRemoval(response.data.channelRemoval)}`;
     });
   };
 

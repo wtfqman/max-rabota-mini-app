@@ -1,7 +1,8 @@
-import type { UserProfile } from '@rabst24/db';
+import { UserStatus, type UserProfile } from '@rabst24/db';
 import type { UserService } from '@rabst24/core';
 import { serializeUser } from '@rabst24/core';
 import { config } from '@rabst24/config';
+import { AppError } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
 import type { AuthRepository } from './auth.repository.js';
 import type {
@@ -34,6 +35,13 @@ export class AuthService extends FoundationService {
       },
       initData.user.language_code
     );
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new AppError('User is blocked', 403, {
+        status: user.status.toLowerCase()
+      });
+    }
+
     const profile = await this.authRepository.findProfileByUserId(user.id);
 
     return {

@@ -12,3 +12,7 @@ export const teamUserQuerySchema = z.object({
 export const updateUserRoleSchema = z.object({
   role: z.enum(['user', 'moderator', 'admin'])
 });
+
+export const updateUserStatusSchema = z.object({
+  status: z.enum(['active', 'blocked'])
+});

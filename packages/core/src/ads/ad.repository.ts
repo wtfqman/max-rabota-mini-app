@@ -1,4 +1,4 @@
-import { AdStatus, AdType, Prisma, type PrismaClient } from '@rabst24/db';
+import { AdStatus, AdType, Prisma, UserStatus, type PrismaClient } from '@rabst24/db';
 import type { AdListQueryDto, AdTypeCode } from '@rabst24/shared';
 import {
   buildTaxonomySearchVariants,
@@ -6,6 +6,7 @@ import {
   canonicalizeDistrict,
   normalizeSearchText
 } from '@rabst24/shared';
+import { getAdPublicationSettings, mergeAdPublicationSettings } from './ad-publication-settings.js';
 
 export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
   owner: {
@@ -15,7 +16,9 @@ export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
       maxUsername: true,
       firstName: true,
       lastName: true,
-      displayName: true
+      displayName: true,
+      status: true,
+      deletedAt: true
     }
   },
   vacancyDetails: {
@@ -194,6 +197,7 @@ export class AdRepository {
       where: {
         ownerId,
         type,
+        deletedAt: null,
         status: {
           not: AdStatus.DRAFT
         },
@@ -436,6 +440,71 @@ export class AdRepository {
         deletedAt: null
       },
       select: {
+        id: true,
+        metadataJson: true
+      }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    return this.db.ad.update({
+      where: {
+        id: adId
+      },
+      data: this.buildStatusUpdateData(status, existing.metadataJson),
+      include: adWithDetailsInclude
+    });
+  }
+
+  async updateStatus(adId: string, status: AdStatus) {
+    const existing = await this.db.ad.findUnique({
+      where: {
+        id: adId
+      },
+      select: {
+        metadataJson: true
+      }
+    });
+
+    return this.db.ad.update({
+      where: {
+        id: adId
+      },
+      data: this.buildStatusUpdateData(status, existing?.metadataJson)
+    });
+  }
+
+  async markPublishedIfPublishable(adId: string): Promise<AdWithDetailsRecord | null> {
+    const updated = await this.db.ad.updateMany({
+      where: {
+        id: adId,
+        status: {
+          in: [AdStatus.APPROVED, AdStatus.PUBLISHED]
+        },
+        deletedAt: null,
+        hiddenAt: null,
+        archivedAt: null
+      },
+      data: this.buildStatusUpdateData(AdStatus.PUBLISHED)
+    });
+
+    if (updated.count === 0) {
+      return null;
+    }
+
+    return this.findWithDetailsById(adId);
+  }
+
+  async updateOwnedMetadataJson(ownerId: string, adId: string, metadataJson: string): Promise<AdWithDetailsRecord | null> {
+    const existing = await this.db.ad.findFirst({
+      where: {
+        id: adId,
+        ownerId,
+        deletedAt: null
+      },
+      select: {
         id: true
       }
     });
@@ -448,25 +517,17 @@ export class AdRepository {
       where: {
         id: adId
       },
-      data: this.buildStatusUpdateData(status),
+      data: {
+        metadataJson
+      },
       include: adWithDetailsInclude
     });
   }
 
-  async updateStatus(adId: string, status: AdStatus) {
-    return this.db.ad.update({
-      where: {
-        id: adId
-      },
-      data: this.buildStatusUpdateData(status)
-    });
-  }
-
-  async updateOwnedMetadataJson(ownerId: string, adId: string, metadataJson: string): Promise<AdWithDetailsRecord | null> {
+  async updateMetadataJson(adId: string, metadataJson: string): Promise<AdWithDetailsRecord | null> {
     const existing = await this.db.ad.findFirst({
       where: {
         id: adId,
-        ownerId,
         deletedAt: null
       },
       select: {
@@ -564,6 +625,12 @@ export class AdRepository {
       hiddenAt: null,
       archivedAt: null,
       isTest: false,
+      owner: {
+        is: {
+          status: UserStatus.ACTIVE,
+          deletedAt: null
+        }
+      },
       type: type ? this.mapAdType(type) : undefined
     };
   }
@@ -994,8 +1061,16 @@ export class AdRepository {
     return undefined;
   }
 
-  private buildStatusUpdateData(status: AdStatus): Prisma.AdUpdateInput {
+  private buildStatusUpdateData(status: AdStatus, metadataJson?: string | null): Prisma.AdUpdateInput {
     const now = new Date();
+    const shouldDisableAutoRepeat =
+      status === AdStatus.REJECTED ||
+      status === AdStatus.HIDDEN ||
+      status === AdStatus.ARCHIVED ||
+      status === AdStatus.DELETED;
+    const currentPublicationSettings = shouldDisableAutoRepeat
+      ? getAdPublicationSettings(metadataJson)
+      : null;
 
     return {
       status,
@@ -1004,7 +1079,13 @@ export class AdRepository {
       publishedAt: status === AdStatus.PUBLISHED ? now : undefined,
       hiddenAt: status === AdStatus.HIDDEN ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
       archivedAt: status === AdStatus.ARCHIVED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
-      deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined
+      deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      metadataJson: currentPublicationSettings?.autoRepeat
+        ? mergeAdPublicationSettings(metadataJson, {
+            ...currentPublicationSettings,
+            autoRepeat: false
+          })
+        : undefined
     };
   }
 }

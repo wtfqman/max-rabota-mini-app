@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Copy, Crown, RefreshCw, Search, ShieldCheck, UserCog, Users } from 'lucide-react';
+import { Ban, CheckCircle2, Copy, Crown, RefreshCw, Search, ShieldCheck, UserCog, Users } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
 import type { TeamUser } from '../features/ads/ad.types.js';
 import { apiClient } from '../shared/api/client.js';
@@ -13,6 +13,7 @@ import { SectionCard } from '../shared/ui/SectionCard.js';
 import { StatChip } from '../shared/ui/StatChip.js';
 
 type TeamRole = TeamUser['role'];
+type TeamStatus = TeamUser['status'];
 
 const roleOptions: Array<{ role: TeamRole; label: string }> = [
   { role: 'user', label: 'Пользователь' },
@@ -90,6 +91,32 @@ export function TeamPage() {
         current.map((item) => (item.id === user.id ? { ...item, role: response.data.role } : item))
       );
       setMessage(`${getUserName(user)} теперь: ${getRoleLabel(response.data.role)}. Попросите человека закрыть и открыть mini app, чтобы обновился доступ.`);
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const updateAccountStatus = async (user: TeamUser, status: Extract<TeamStatus, 'active' | 'blocked'>) => {
+    if (user.status === status || updatingUserId) {
+      return;
+    }
+
+    if (status === 'blocked' && !window.confirm(`Заблокировать ${getUserName(user)}? Пользователь потеряет доступ к приложению.`)) {
+      return;
+    }
+
+    setUpdatingUserId(user.id);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const response = await apiClient.updateTeamUserStatus(user.id, status);
+      setUsers((current) =>
+        current.map((item) => (item.id === user.id ? { ...item, status: response.data.status } : item))
+      );
+      setMessage(`${getUserName(user)} теперь: ${getStatusLabel(response.data.status)}.${formatBlockCleanup(response.data)}`);
     } catch (requestError) {
       setError(getTeamError(requestError));
     } finally {
@@ -206,6 +233,7 @@ export function TeamPage() {
               updating={updatingUserId === user.id}
               onCopyMaxId={copyMaxId}
               onUpdateRole={updateRole}
+              onUpdateStatus={updateAccountStatus}
             />
           ))}
         </section>
@@ -220,7 +248,8 @@ function TeamUserCard({
   adminsCount,
   updating,
   onCopyMaxId,
-  onUpdateRole
+  onUpdateRole,
+  onUpdateStatus
 }: {
   user: TeamUser;
   currentUserId: string | null;
@@ -228,10 +257,12 @@ function TeamUserCard({
   updating: boolean;
   onCopyMaxId: (maxUserId: string) => void;
   onUpdateRole: (user: TeamUser, role: TeamRole) => void;
+  onUpdateStatus: (user: TeamUser, status: Extract<TeamStatus, 'active' | 'blocked'>) => void;
 }) {
   const isSelf = user.id === currentUserId;
   const isLastAdmin = user.role === 'admin' && adminsCount <= 1;
   const name = getUserName(user);
+  const canBlock = !isSelf && user.status !== 'deleted' && !(isLastAdmin && user.status === 'active');
 
   return (
     <article className="app-surface rounded-panel border border-white/8 p-4">
@@ -291,6 +322,32 @@ function TeamUserCard({
         </div>
         {isSelf ? <p className="text-xs leading-5 text-text-muted">Себе нельзя снять роль админа.</p> : null}
         {isLastAdmin ? <p className="text-xs leading-5 text-text-muted">Последнего админа снять нельзя.</p> : null}
+      </div>
+
+      <div className="mt-4 grid gap-2">
+        <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-text-muted">Доступ</p>
+        {user.status === 'blocked' ? (
+          <ActionButton
+            type="button"
+            variant="secondary"
+            icon={<CheckCircle2 size={17} />}
+            disabled={updating || isSelf}
+            onClick={() => onUpdateStatus(user, 'active')}
+          >
+            Разблокировать
+          </ActionButton>
+        ) : (
+          <ActionButton
+            type="button"
+            variant="danger"
+            icon={<Ban size={17} />}
+            disabled={updating || !canBlock}
+            onClick={() => onUpdateStatus(user, 'blocked')}
+          >
+            Заблокировать
+          </ActionButton>
+        )}
+        {isSelf ? <p className="text-xs leading-5 text-text-muted">Свой аккаунт заблокировать нельзя.</p> : null}
       </div>
     </article>
   );
@@ -357,6 +414,32 @@ function getStatusLabel(status: TeamUser['status']): string {
   }
 
   return 'удалён';
+}
+
+function formatBlockCleanup(data: {
+  hiddenAdsTotal?: number;
+  channelRemoval?: {
+    attempted: number;
+    removed: number;
+    failed: number;
+    skipped: number;
+  } | null;
+}): string {
+  if (!data.hiddenAdsTotal && !data.channelRemoval) {
+    return '';
+  }
+
+  const parts: string[] = [];
+
+  if (data.hiddenAdsTotal) {
+    parts.push(`скрыто объявлений: ${data.hiddenAdsTotal}`);
+  }
+
+  if (data.channelRemoval?.attempted) {
+    parts.push(`удалено из канала: ${data.channelRemoval.removed}/${data.channelRemoval.attempted}`);
+  }
+
+  return parts.length ? ` ${parts.join(', ')}.` : '';
 }
 
 function getTeamError(error: unknown): string {

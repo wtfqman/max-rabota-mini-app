@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, FileUser, Heart, ListChecks, Megaphone, RefreshCw, Settings2, Users } from 'lucide-react';
+import { FileUser, Heart, ListChecks, RefreshCw, Users } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
 import type { UserProfilePayload } from '../features/ads/ad.types.js';
 import type { AuthProfile } from '../features/auth/auth.types.js';
@@ -146,43 +146,7 @@ export function ProfilePage() {
           icon={<Heart size={23} />}
           tone="green"
         />
-        <TileCard
-          to="/my-ads"
-          title="Пульт публикации"
-          description="Автопубликация, срок размещения и напоминания"
-          icon={<Settings2 size={23} />}
-          tone="green"
-        />
       </section>
-
-      <SectionCard
-        title="Пульт управления публикацией"
-        description="В карточках ваших объявлений можно включить автопубликацию, выбрать повтор, срок размещения и напоминание перед отключением."
-      >
-        <div className="grid gap-3">
-          <div className="grid gap-2 rounded-panel border border-white/10 bg-surface-900/92 p-3">
-            <div className="flex items-center gap-2 text-base font-extrabold text-text-primary">
-              <Megaphone size={18} className="text-accent-green" />
-              Управление без лишних слов
-            </div>
-            <p className="text-sm leading-6 text-text-secondary">
-              В кабинете показываются только понятные статусы: активно, на модерации, скрыто или завершено.
-            </p>
-          </div>
-          <div className="grid gap-2 rounded-panel border border-white/10 bg-surface-900/92 p-3">
-            <div className="flex items-center gap-2 text-base font-extrabold text-text-primary">
-              <Bell size={18} className="text-accent-green" />
-              Напоминания
-            </div>
-            <p className="text-sm leading-6 text-text-secondary">
-              Если включить напоминание, объявление заранее подскажет, что срок размещения подходит к концу.
-            </p>
-          </div>
-          <LinkButton to="/my-ads" variant="primary" icon={<Settings2 size={18} />}>
-            Открыть пульт
-          </LinkButton>
-        </div>
-      </SectionCard>
 
       <SectionCard title="О профиле" description="Информация, которая помогает объявлениям выглядеть доверительно.">
         <div className="grid gap-2 text-sm leading-6 text-text-secondary">

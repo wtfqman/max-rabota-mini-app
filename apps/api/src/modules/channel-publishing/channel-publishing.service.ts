@@ -38,7 +38,9 @@ export class ChannelPublishingModuleService extends FoundationService {
       ad
     });
 
-    await this.adService.markAdPublished(adId);
+    if (result.status === 'published') {
+      await this.adService.markAdPublished(adId);
+    }
 
     return result;
   }

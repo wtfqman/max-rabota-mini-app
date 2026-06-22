@@ -12,7 +12,6 @@ import {
   RefreshCw,
   RotateCcw,
   Send,
-  Settings2,
   Trash2,
   X
 } from 'lucide-react';
@@ -112,10 +111,9 @@ export function MyAdsPage() {
     const pending = ads.filter((ad) => ad.status === 'pending_moderation').length;
     const hidden = ads.filter((ad) => isHiddenStatus(ad.status)).length;
     const deleted = ads.filter((ad) => ad.status === 'deleted').length;
-    const autoRepeat = ads.filter((ad) => getPublicationSettings(publicationSettings, ad.id).autoRepeat).length;
 
-    return { published, pending, hidden, deleted, autoRepeat };
-  }, [ads, publicationSettings]);
+    return { published, pending, hidden, deleted };
+  }, [ads]);
 
   const reload = () => setReloadKey((value) => value + 1);
 
@@ -212,7 +210,7 @@ export function MyAdsPage() {
             <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-accent-green">Кабинет объявлений</p>
             <h1 className="text-2xl font-black leading-tight text-text-primary">Мои объявления</h1>
             <p className="max-w-md text-sm leading-5 text-text-secondary">
-              Управляйте публикациями: редактируйте, скрывайте, отправляйте снова и настраивайте автопубликацию.
+              Управляйте публикациями: редактируйте, скрывайте и отправляйте объявления на повторную проверку.
             </p>
           </div>
         </div>
@@ -223,7 +221,6 @@ export function MyAdsPage() {
         <StatChip label="на модерации" value={String(counters.pending)} tone="green" />
         <StatChip label="скрыто" value={String(counters.hidden)} />
         <StatChip label="удалено" value={String(counters.deleted)} />
-        <StatChip label="с автопубликацией" value={String(counters.autoRepeat)} tone="green" />
       </div>
 
       {notice ? (
@@ -286,7 +283,6 @@ export function MyAdsPage() {
               onHide={() => hideAd(ad)}
               onArchive={() => archiveAd(ad)}
               onResubmit={() => resubmitAd(ad)}
-              onSettings={() => setSettingsAd(ad)}
               onDelete={() => deleteAd(ad)}
             />
           ))}
@@ -329,7 +325,6 @@ function ManagedAdCard({
   onHide,
   onArchive,
   onResubmit,
-  onSettings,
   onDelete
 }: {
   ad: OwnedAdCard;
@@ -341,7 +336,6 @@ function ManagedAdCard({
   onHide: () => void;
   onArchive: () => void;
   onResubmit: () => void;
-  onSettings: () => void;
   onDelete: () => void;
 }) {
   const status = userStatus(ad.status);
@@ -370,9 +364,6 @@ function ManagedAdCard({
       <div className="space-y-3 rounded-panel border border-white/8 bg-surface-950/70 p-3 shadow-[0_12px_34px_rgba(0,0,0,0.28)]">
         <div className="flex flex-wrap gap-2 text-sm">
           <StatChip label={status.label} tone={status.tone} icon={status.icon} />
-          {settings.autoRepeat ? (
-            <StatChip label={`автопубликация: ${repeatLabel(settings.repeatPeriod)}`} tone="green" icon={<RotateCcw size={15} />} />
-          ) : null}
           <StatChip label={`срок: ${activeLabel(settings.activePeriod)}`} icon={<Clock3 size={15} />} />
         </div>
 
@@ -393,9 +384,6 @@ function ManagedAdCard({
           ) : null}
           <ActionButton variant="secondary" icon={<Pencil size={17} />} disabled={deleted} onClick={onEdit}>
             Редактировать
-          </ActionButton>
-          <ActionButton variant="secondary" icon={<Settings2 size={17} />} disabled={deleted} onClick={onSettings}>
-            Автопубликация
           </ActionButton>
           {pending ? (
             <ActionButton variant="secondary" disabled icon={<Clock3 size={17} />}>
@@ -591,9 +579,15 @@ function PublicationSettingsSheet({
 }) {
   const [draft, setDraft] = useState<PublicationSettings>(settings ?? defaultPublicationSettings(ad.id));
   const status = userStatus(ad.status);
+  const canUseAutoRepeat = ad.status === 'published';
+  const effectiveAutoRepeat = canUseAutoRepeat && draft.autoRepeat;
 
   const updateDraft = <TKey extends keyof PublicationSettings>(key: TKey, value: PublicationSettings[TKey]) => {
     setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const saveDraft = () => {
+    onSave(canUseAutoRepeat ? draft : { ...draft, autoRepeat: false });
   };
 
   return (
@@ -602,14 +596,15 @@ function PublicationSettingsSheet({
         <SectionCard title={ad.title} description="Настройте, как объявление будет жить после публикации.">
           <div className="flex flex-wrap gap-2">
             <StatChip label={status.label} tone={status.tone} icon={status.icon} />
-            {draft.autoRepeat ? <StatChip label="автопубликация включена" tone="green" icon={<RotateCcw size={15} />} /> : null}
+            {effectiveAutoRepeat ? <StatChip label="автопубликация включена" tone="green" icon={<RotateCcw size={15} />} /> : null}
           </div>
         </SectionCard>
 
         <ToggleRow
           title="Автопубликация"
-          description="Объявление будет повторяться по выбранному периоду."
-          checked={draft.autoRepeat}
+          description={canUseAutoRepeat ? 'Объявление будет повторяться по выбранному периоду.' : 'Доступна после публикации объявления в канал.'}
+          checked={effectiveAutoRepeat}
+          disabled={!canUseAutoRepeat}
           onChange={(value) => updateDraft('autoRepeat', value)}
         />
 
@@ -617,7 +612,7 @@ function PublicationSettingsSheet({
           label="Повтор публикации"
           value={draft.repeatPeriod}
           options={repeatPeriodOptions}
-          disabled={!draft.autoRepeat}
+          disabled={!effectiveAutoRepeat}
           onChange={(event) => updateDraft('repeatPeriod', event.target.value as PublicationSettings['repeatPeriod'])}
         />
 
@@ -636,7 +631,7 @@ function PublicationSettingsSheet({
         />
 
         <div className="sticky bottom-0 z-10 grid grid-cols-[1fr_auto] gap-2 rounded-[20px] border border-white/10 bg-surface-900/95 p-2 shadow-[0_-14px_36px_rgba(0,0,0,0.36)] backdrop-blur-xl">
-          <ActionButton type="button" onClick={() => onSave(draft)} icon={<CheckCircle2 size={18} />}>
+          <ActionButton type="button" onClick={saveDraft} icon={<CheckCircle2 size={18} />}>
             Сохранить
           </ActionButton>
           <ActionButton type="button" variant="secondary" onClick={onClose}>
@@ -652,17 +647,22 @@ function ToggleRow({
   title,
   description,
   checked,
+  disabled = false,
   onChange
 }: {
   title: string;
   description: string;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <button
       type="button"
-      className="flex items-center justify-between gap-4 rounded-panel border border-white/10 bg-surface-900/92 p-4 text-left transition hover:border-accent-green/35 active:scale-[0.985]"
+      className={`flex items-center justify-between gap-4 rounded-panel border border-white/10 bg-surface-900/92 p-4 text-left transition ${
+        disabled ? 'cursor-not-allowed opacity-65' : 'hover:border-accent-green/35 active:scale-[0.985]'
+      }`}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
     >
       <span className="min-w-0 space-y-1">
@@ -802,10 +802,6 @@ function isHiddenStatus(status: PublicAdStatus) {
 
 function isInactiveStatus(status: PublicAdStatus) {
   return isHiddenStatus(status) || status === 'archived' || status === 'rejected' || status === 'deleted' || status === 'draft';
-}
-
-function repeatLabel(value: PublicationSettings['repeatPeriod']) {
-  return repeatPeriodOptions.find((option) => option.value === value)?.label ?? 'раз в 3 дня';
 }
 
 function activeLabel(value: PublicationSettings['activePeriod']) {

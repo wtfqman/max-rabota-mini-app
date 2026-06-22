@@ -1,4 +1,4 @@
-import { ChannelPublishStatus, type Prisma } from '@rabst24/db';
+import { AdStatus, ChannelPublishStatus, UserStatus, type Prisma } from '@rabst24/db';
 import { logger } from '@rabst24/config';
 import type { MaxApiClient, MaxMediaAttachment } from '@rabst24/max-api';
 import type { AdRepository, AdWithDetailsRecord } from '../ads/ad.repository.js';
@@ -28,6 +28,20 @@ interface ChannelMediaStrategy {
   readonly name: ChannelMediaStrategyName;
   prepare(photo: AdPhotoForChannel): Promise<PreparedChannelMedia | null>;
 }
+
+export type ChannelPublicationResult =
+  | {
+      status: 'published';
+      logId: string;
+      response: unknown;
+      mediaStrategy: ChannelMediaStrategyName;
+    }
+  | {
+      status: 'skipped';
+      reason: string;
+      logId?: string;
+      mediaStrategy?: ChannelMediaStrategyName;
+    };
 
 class ReusableMaxMediaStrategy implements ChannelMediaStrategy {
   readonly name = 'reusable_max_media_token' as const;
@@ -122,18 +136,20 @@ class FallbackUploadMediaStrategy implements ChannelMediaStrategy {
 }
 
 export class ChannelPublishingService {
+  private static readonly duplicateGuardWindowMs = 5 * 60 * 1000;
+  private readonly activePublicationKeys = new Set<string>();
   private readonly mediaStrategies: ChannelMediaStrategy[];
 
   constructor(
     private readonly maxApiClient: MaxApiClient,
     private readonly channelPublishLogRepository: ChannelPublishLogRepository,
     private readonly channelPostFormatter: ChannelPostFormatter,
-    adRepository: AdRepository,
+    private readonly adRepository: AdRepository,
     publicBaseUrl = 'https://app.rabst24.ru'
   ) {
     this.mediaStrategies = [
       new ReusableMaxMediaStrategy(),
-      new FallbackUploadMediaStrategy(maxApiClient, adRepository, publicBaseUrl)
+      new FallbackUploadMediaStrategy(maxApiClient, this.adRepository, publicBaseUrl)
     ];
   }
 
@@ -152,57 +168,136 @@ export class ChannelPublishingService {
     chatId: string | number | bigint;
     channelUrl?: string | null;
     ad: AdWithDetailsRecord;
-  }) {
-    const text = this.channelPostFormatter.formatAd(params.ad);
-    const preparedMedia = await this.prepareMainMedia(params.ad).catch((error: unknown) => {
-      logger.warn({ err: error, adId: params.ad.id }, 'MAX media preparation failed, publishing text-only channel post');
-      return {
-        error: error instanceof Error ? error.message : 'Unknown MAX media preparation error'
-      };
-    });
-    const media = this.isPreparedMedia(preparedMedia) ? preparedMedia : null;
-    const mediaError = this.isMediaError(preparedMedia) ? preparedMedia.error : null;
-    const ctaKeyboard = this.channelPostFormatter.createCtaKeyboard(params.ad);
-    const attachments = media ? [media.attachment, ctaKeyboard] : [ctaKeyboard];
+  }): Promise<ChannelPublicationResult> {
+    const maxChatId = this.toStringOrNull(params.chatId);
+    const publicationKey = this.getPublicationKey(params.ad.id, maxChatId);
 
-    const log = await this.channelPublishLogRepository.createPending({
-      adId: params.ad.id,
-      channelId: String(params.chatId),
-      channelUrl: params.channelUrl,
-      maxChatId: this.toStringOrNull(params.chatId),
-      payload: {
-        adId: params.ad.id,
-        type: params.ad.type.toLowerCase(),
-        mediaError
-      },
-      publishedText: text,
-      mediaStrategy: media?.strategy ?? 'text_only',
-      mediaAttachment: media?.payload ?? null
-    });
+    if (this.activePublicationKeys.has(publicationKey)) {
+      return {
+        status: 'skipped',
+        reason: 'Publication is already in progress'
+      };
+    }
+
+    this.activePublicationKeys.add(publicationKey);
 
     try {
-      const response = await this.maxApiClient.sendMessage({
-        chatId: params.chatId,
-        disableLinkPreview: true,
-        body: {
-          text,
-          format: 'markdown',
-          attachments
-        }
+      const ad = await this.findPublishableAd(params.ad.id);
+
+      if (!ad) {
+        return {
+          status: 'skipped',
+          reason: 'Ad is no longer approved or published'
+        };
+      }
+
+      const recentAttempt = await this.channelPublishLogRepository.findRecentActiveAttempt({
+        adId: ad.id,
+        maxChatId,
+        since: new Date(Date.now() - ChannelPublishingService.duplicateGuardWindowMs)
       });
 
-      await this.channelPublishLogRepository.markPublished(log.id, this.extractMessageInfo(response));
-      return {
-        logId: log.id,
-        response,
-        mediaStrategy: media?.strategy ?? 'text_only'
-      };
-    } catch (error) {
-      await this.channelPublishLogRepository.markFailed(
-        log.id,
-        error instanceof Error ? error.message : 'Unknown publication error'
-      );
-      throw error;
+      if (recentAttempt) {
+        return {
+          status: 'skipped',
+          logId: recentAttempt.id,
+          reason:
+            recentAttempt.status === ChannelPublishStatus.PENDING
+              ? 'Publication is already in progress'
+              : 'Recent publication already exists',
+          mediaStrategy: this.toKnownMediaStrategy(recentAttempt.mediaStrategy)
+        };
+      }
+
+      const text = this.channelPostFormatter.formatAd(ad);
+      const log = await this.channelPublishLogRepository.createPending({
+        adId: ad.id,
+        channelId: String(params.chatId),
+        channelUrl: params.channelUrl,
+        maxChatId,
+        payload: {
+          adId: ad.id,
+          type: ad.type.toLowerCase(),
+          duplicateGuardWindowMs: ChannelPublishingService.duplicateGuardWindowMs
+        },
+        publishedText: text
+      });
+      const preparedMedia = await this.prepareMainMedia(ad).catch((error: unknown) => {
+        logger.warn({ err: error, adId: ad.id }, 'MAX media preparation failed, publishing text-only channel post');
+        return {
+          error: error instanceof Error ? error.message : 'Unknown MAX media preparation error'
+        };
+      });
+      const media = this.isPreparedMedia(preparedMedia) ? preparedMedia : null;
+      const mediaError = this.isMediaError(preparedMedia) ? preparedMedia.error : null;
+      const ctaKeyboard = this.channelPostFormatter.createCtaKeyboard(ad);
+      const attachments = media ? [media.attachment, ctaKeyboard] : [ctaKeyboard];
+
+      await this.channelPublishLogRepository.updatePendingPayload(log.id, {
+        payload: {
+          adId: ad.id,
+          type: ad.type.toLowerCase(),
+          duplicateGuardWindowMs: ChannelPublishingService.duplicateGuardWindowMs,
+          mediaError
+        },
+        publishedText: text,
+        mediaStrategy: media?.strategy ?? 'text_only',
+        mediaAttachment: media?.payload ?? null
+      });
+
+      if (!(await this.isAdPublishable(ad.id))) {
+        const reason = 'Ad is no longer approved or published';
+        await this.channelPublishLogRepository.markSkipped(log.id, reason);
+
+        return {
+          status: 'skipped',
+          logId: log.id,
+          reason,
+          mediaStrategy: media?.strategy ?? 'text_only'
+        };
+      }
+
+      try {
+        const response = await this.maxApiClient.sendMessage({
+          chatId: params.chatId,
+          disableLinkPreview: true,
+          body: {
+            text,
+            format: 'markdown',
+            attachments
+          }
+        });
+        const messageInfo = this.extractMessageInfo(response);
+
+        await this.channelPublishLogRepository.markPublished(log.id, messageInfo);
+
+        if (!(await this.isAdPublishable(ad.id))) {
+          const reason = 'Ad changed status after MAX accepted the post';
+          await this.removeJustPublishedMessage(log.id, messageInfo, ad.id, reason);
+
+          return {
+            status: 'skipped',
+            logId: log.id,
+            reason,
+            mediaStrategy: media?.strategy ?? 'text_only'
+          };
+        }
+
+        return {
+          status: 'published',
+          logId: log.id,
+          response,
+          mediaStrategy: media?.strategy ?? 'text_only'
+        };
+      } catch (error) {
+        await this.channelPublishLogRepository.markFailed(
+          log.id,
+          error instanceof Error ? error.message : 'Unknown publication error'
+        );
+        throw error;
+      }
+    } finally {
+      this.activePublicationKeys.delete(publicationKey);
     }
   }
 
@@ -349,6 +444,67 @@ export class ChannelPublishingService {
       return String(value);
     } catch {
       return null;
+    }
+  }
+
+  private getPublicationKey(adId: string, maxChatId: string | null): string {
+    return `${adId}:${maxChatId ?? 'default'}`;
+  }
+
+  private async findPublishableAd(adId: string): Promise<AdWithDetailsRecord | null> {
+    const ad = await this.adRepository.findWithDetailsById(adId);
+
+    if (!ad || !this.isPublishableAd(ad)) {
+      return null;
+    }
+
+    return ad;
+  }
+
+  private async isAdPublishable(adId: string): Promise<boolean> {
+    return Boolean(await this.findPublishableAd(adId));
+  }
+
+  private isPublishableAd(ad: AdWithDetailsRecord): boolean {
+    return (
+      (ad.status === AdStatus.APPROVED || ad.status === AdStatus.PUBLISHED) &&
+      !ad.deletedAt &&
+      !ad.hiddenAt &&
+      !ad.archivedAt &&
+      ad.owner.status === UserStatus.ACTIVE &&
+      !ad.owner.deletedAt
+    );
+  }
+
+  private toKnownMediaStrategy(value: string | null): ChannelMediaStrategyName | undefined {
+    if (value === 'reusable_max_media_token' || value === 'fallback_max_upload' || value === 'text_only') {
+      return value;
+    }
+
+    return undefined;
+  }
+
+  private async removeJustPublishedMessage(
+    logId: string,
+    messageInfo: {
+      maxMessageId?: string | null;
+      maxMessageUrl?: string | null;
+    },
+    adId: string,
+    reason: string
+  ): Promise<void> {
+    if (!messageInfo.maxMessageId) {
+      await this.channelPublishLogRepository.markFailed(logId, `${reason}; MAX message id is unavailable`);
+      return;
+    }
+
+    try {
+      await this.maxApiClient.deleteMessage(messageInfo.maxMessageId);
+      await this.channelPublishLogRepository.markRemoved(logId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'MAX channel post removal failed';
+      await this.channelPublishLogRepository.markRemoveFailed(logId, message);
+      logger.warn({ err: error, adId, logId, maxMessageId: messageInfo.maxMessageId }, 'Unable to remove stale MAX channel post');
     }
   }
 }

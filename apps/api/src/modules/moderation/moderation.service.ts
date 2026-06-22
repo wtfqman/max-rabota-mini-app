@@ -41,16 +41,18 @@ export class ModerationModuleService extends FoundationService {
     }
 
     return {
-      ad,
+      ad: await this.adService.getAdDetails(adId),
       publication
     };
   }
 
   async reject(adId: string, moderatorId: string, reason: string) {
     await this.moderationService.rejectAd(adId, moderatorId, reason);
+    const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
 
     return {
-      ad: await this.adService.getAdDetails(adId)
+      ad: await this.adService.getAdDetails(adId),
+      channelRemoval
     };
   }
 
@@ -96,7 +98,7 @@ export class ModerationModuleService extends FoundationService {
 
   async removeFromChannel(adId: string, moderatorId: string) {
     await this.moderationService.logChannelRemoved(adId, moderatorId, 'Снятие публикации из канала');
-    const ad = await this.adService.getAdDetails(adId);
+    const ad = await this.adService.disableAutoRepeat(adId);
     const channelRemoval = await this.channelPublishingService.removeAdPublications(adId);
 
     return {
@@ -134,6 +136,14 @@ export class ModerationModuleService extends FoundationService {
         channelUrl: config.channelUrl,
         ad
       });
+
+      if (result.status === 'skipped') {
+        return {
+          status: 'skipped' as const,
+          reason: result.reason,
+          logId: result.logId
+        };
+      }
 
       return {
         status: 'published' as const,

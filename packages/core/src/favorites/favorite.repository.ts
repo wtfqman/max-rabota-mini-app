@@ -1,4 +1,4 @@
-import { AdStatus, type Favorite, type PrismaClient } from '@rabst24/db';
+import { AdStatus, UserStatus, type Favorite, type PrismaClient } from '@rabst24/db';
 import { adWithDetailsInclude, type AdWithDetailsRecord } from '../ads/ad.repository.js';
 
 export interface FavoriteWithAd {
@@ -52,7 +52,13 @@ export class FavoriteRepository {
           },
           deletedAt: null,
           hiddenAt: null,
-          archivedAt: null
+          archivedAt: null,
+          owner: {
+            is: {
+              status: UserStatus.ACTIVE,
+              deletedAt: null
+            }
+          }
         }
       },
       include: {

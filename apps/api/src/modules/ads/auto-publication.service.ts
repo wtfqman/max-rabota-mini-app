@@ -62,9 +62,7 @@ export class AutoPublicationService {
     try {
       const ads = await this.db.ad.findMany({
         where: {
-          status: {
-            in: [AdStatus.APPROVED, AdStatus.PUBLISHED]
-          },
+          status: AdStatus.PUBLISHED,
           deletedAt: null,
           hiddenAt: null,
           archivedAt: null,
@@ -110,6 +108,11 @@ export class AutoPublicationService {
       return;
     }
 
+    if (!settings.autoRepeatStartedAt) {
+      await this.disableAutoRepeat(ad.id, ad.metadataJson, settings);
+      return;
+    }
+
     const activeUntil = getActiveUntil(settings);
 
     if (activeUntil && activeUntil <= now) {
@@ -124,18 +127,67 @@ export class AutoPublicationService {
       return;
     }
 
+    const latestAd = await this.findAutoPublishableAd(ad.id);
+    const latestSettings = latestAd ? getAdPublicationSettings(latestAd.metadataJson) : null;
+
+    if (!latestAd || !latestSettings?.autoRepeat) {
+      return;
+    }
+
+    if (!latestSettings.autoRepeatStartedAt) {
+      await this.disableAutoRepeat(latestAd.id, latestAd.metadataJson, latestSettings);
+      return;
+    }
+
+    const latestActiveUntil = getActiveUntil(latestSettings);
+
+    if (latestActiveUntil && latestActiveUntil <= now) {
+      await this.disableAutoRepeat(latestAd.id, latestAd.metadataJson, latestSettings);
+      return;
+    }
+
+    const latestLastPublishedAt = await this.getLastPublishedAt(latestAd.id, latestAd.publishedAt);
+    const latestNextPublishAt = getNextAutoPublishAt(latestSettings, latestLastPublishedAt);
+
+    if (latestNextPublishAt && latestNextPublishAt > now) {
+      return;
+    }
+
     try {
-      await this.channelPublishingService.publishApprovedAd({
+      const result = await this.channelPublishingService.publishApprovedAd({
         chatId: channelChatId,
         channelUrl: config.channelUrl,
-        ad
+        ad: latestAd
       });
-      await this.adService.markAdPublished(ad.id);
-      await this.markAutoPublished(ad.id, ad.metadataJson, now, settings.repeatPeriod);
-      logger.info({ adId: ad.id }, 'Auto publication completed');
+
+      if (result.status !== 'published') {
+        logger.info({ adId: latestAd.id, reason: result.reason }, 'Auto publication skipped');
+        return;
+      }
+
+      await this.adService.markAdPublished(latestAd.id);
+      await this.markAutoPublished(latestAd.id, latestAd.metadataJson, now, latestSettings.repeatPeriod);
+      logger.info({ adId: latestAd.id }, 'Auto publication completed');
     } catch (error) {
-      logger.error({ err: error, adId: ad.id }, 'Auto publication failed');
+      logger.error({ err: error, adId: latestAd.id }, 'Auto publication failed');
     }
+  }
+
+  private async findAutoPublishableAd(adId: string): Promise<AdWithDetailsRecord | null> {
+    return this.db.ad.findFirst({
+      where: {
+        id: adId,
+        status: AdStatus.PUBLISHED,
+        deletedAt: null,
+        hiddenAt: null,
+        archivedAt: null,
+        isTest: false,
+        metadataJson: {
+          contains: '"autoRepeat":true'
+        }
+      },
+      include: adWithDetailsInclude
+    });
   }
 
   private async getLastPublishedAt(adId: string, fallback: Date | null): Promise<Date | null> {

@@ -72,13 +72,17 @@ export class AdsService extends FoundationService {
         throw new AppError('MAX channel chat id is not configured', 400);
       }
 
-      await this.channelPublishingService.publishApprovedAd({
+      const result = await this.channelPublishingService.publishApprovedAd({
         chatId: channelChatId,
         channelUrl: config.channelUrl,
         ad: current
       });
 
-      return this.coreAdService.markAdPublished(adId);
+      if (result.status === 'published') {
+        return this.coreAdService.markAdPublished(adId);
+      }
+
+      return this.coreAdService.getOwnedAdDetails(ownerId, adId);
     }
 
     const ad = await this.coreAdService.resubmitOwnerAd(ownerId, adId);

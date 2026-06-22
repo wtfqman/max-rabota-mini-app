@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from 'express';
 import { config } from '@rabst24/config';
+import { prisma, UserStatus } from '@rabst24/db';
 import { AppError } from '@rabst24/shared';
 
 interface SessionClaims {
@@ -11,7 +12,7 @@ interface SessionClaims {
   exp: number;
 }
 
-export const requireAuth: RequestHandler = (request, _response, next) => {
+export const requireAuth: RequestHandler = async (request, _response, next) => {
   try {
     const header = request.header('authorization');
 
@@ -20,10 +21,31 @@ export const requireAuth: RequestHandler = (request, _response, next) => {
     }
 
     const claims = verifySessionToken(header.slice('Bearer '.length));
+    const user = await prisma.user.findFirst({
+      where: {
+        id: claims.sub,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true
+      }
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 401);
+    }
+
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new AppError('User is blocked', 403, {
+        status: user.status.toLowerCase()
+      });
+    }
 
     request.auth = {
-      userId: claims.sub,
-      role: claims.role
+      userId: user.id,
+      role: user.role.toLowerCase()
     };
 
     next();

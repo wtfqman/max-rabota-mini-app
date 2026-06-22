@@ -1,4 +1,5 @@
-import { UserRole, type Prisma, type PrismaClient, type User } from '@rabst24/db';
+import { getAdPublicationSettings, mergeAdPublicationSettings } from '@rabst24/core';
+import { AdStatus, ModerationAction, UserRole, UserStatus, type Prisma, type PrismaClient, type User } from '@rabst24/db';
 import { AppError } from '@rabst24/shared';
 import { FoundationRepository } from '../../shared/modules/module-status.js';
 
@@ -121,6 +122,61 @@ export class UsersRepository extends FoundationRepository {
     });
   }
 
+  async updateUserStatus(
+    actorId: string,
+    targetUserId: string,
+    status: UserStatus
+  ): Promise<{ user: User; previousStatus: UserStatus; hiddenAdIds: string[] }> {
+    return this.db.$transaction(async (transaction) => {
+      const target = await transaction.user.findUnique({
+        where: {
+          id: targetUserId
+        }
+      });
+
+      if (!target) {
+        throw new AppError('User not found', 404);
+      }
+
+      if (target.id === actorId && status !== UserStatus.ACTIVE) {
+        throw new AppError('Cannot block your own account', 400);
+      }
+
+      if (target.role === UserRole.ADMIN && status !== UserStatus.ACTIVE) {
+        const activeAdmins = await transaction.user.count({
+          where: {
+            role: UserRole.ADMIN,
+            status: UserStatus.ACTIVE,
+            deletedAt: null
+          }
+        });
+
+        if (activeAdmins <= 1) {
+          throw new AppError('Cannot block the last active admin', 400);
+        }
+      }
+
+      const user = await transaction.user.update({
+        where: {
+          id: targetUserId
+        },
+        data: {
+          status
+        }
+      });
+      const hiddenAdIds =
+        status === UserStatus.BLOCKED
+          ? await this.hidePublishableAdsForBlockedUser(transaction, actorId, targetUserId)
+          : [];
+
+      return {
+        user,
+        previousStatus: target.status,
+        hiddenAdIds
+      };
+    });
+  }
+
   async getAdStats(userId: string) {
     const ads = await this.db.ad.findMany({
       where: {
@@ -160,6 +216,68 @@ export class UsersRepository extends FoundationRepository {
         : undefined
     };
   }
+
+  private async hidePublishableAdsForBlockedUser(
+    transaction: Prisma.TransactionClient,
+    actorId: string,
+    targetUserId: string
+  ): Promise<string[]> {
+    const ads = await transaction.ad.findMany({
+      where: {
+        ownerId: targetUserId,
+        deletedAt: null,
+        status: {
+          in: [AdStatus.PENDING_MODERATION, AdStatus.APPROVED, AdStatus.PUBLISHED]
+        }
+      },
+      select: {
+        id: true,
+        status: true,
+        metadataJson: true
+      }
+    });
+
+    if (ads.length === 0) {
+      return [];
+    }
+
+    const now = new Date();
+
+    for (const ad of ads) {
+      const settings = getAdPublicationSettings(ad.metadataJson);
+
+      await transaction.ad.update({
+        where: {
+          id: ad.id
+        },
+        data: {
+          status: AdStatus.HIDDEN,
+          hiddenAt: now,
+          archivedAt: null,
+          deletedAt: null,
+          metadataJson: settings?.autoRepeat
+            ? mergeAdPublicationSettings(ad.metadataJson, {
+                ...settings,
+                autoRepeat: false
+              })
+            : undefined
+        }
+      });
+    }
+
+    await transaction.moderationLog.createMany({
+      data: ads.map((ad) => ({
+        adId: ad.id,
+        moderatorId: actorId,
+        action: ModerationAction.HIDDEN,
+        statusFrom: ad.status,
+        statusTo: AdStatus.HIDDEN,
+        reason: 'Пользователь заблокирован администратором'
+      }))
+    });
+
+    return ads.map((ad) => ad.id);
+  }
 }
 
 function countBy(values: string[]): Record<string, number> {
@@ -179,4 +297,8 @@ export function mapRole(role: 'user' | 'moderator' | 'admin'): UserRole {
   }
 
   return UserRole.USER;
+}
+
+export function mapStatus(status: 'active' | 'blocked'): UserStatus {
+  return status === 'blocked' ? UserStatus.BLOCKED : UserStatus.ACTIVE;
 }

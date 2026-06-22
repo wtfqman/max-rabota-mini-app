@@ -41,7 +41,8 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad)
+      ad: serializeAdDetail(result.ad),
+      channelRemoval: result.channelRemoval
     });
   });
 

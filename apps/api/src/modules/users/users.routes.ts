@@ -3,7 +3,7 @@ import type { ApiContainer } from '../../app/container.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 import { userIdParamSchema } from '../../shared/http/params.schemas.js';
 import { validateRequest } from '../../shared/http/validate-request.js';
-import { teamUserQuerySchema, updateCurrentUserSchema, updateUserRoleSchema } from './users.schemas.js';
+import { teamUserQuerySchema, updateCurrentUserSchema, updateUserRoleSchema, updateUserStatusSchema } from './users.schemas.js';
 import { UsersController } from './users.controller.js';
 import { UsersRepository } from './users.repository.js';
 import { UsersService } from './users.service.js';
@@ -11,7 +11,7 @@ import { UsersService } from './users.service.js';
 export function createUsersRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new UsersRepository(container.db);
-  const service = new UsersService(repository);
+  const service = new UsersService(repository, container.channelPublishingService);
   const controller = new UsersController(service);
 
   router.get('/status', controller.status);
@@ -24,6 +24,13 @@ export function createUsersRouter(container: ApiContainer): Router {
     requireRole(['admin']),
     validateRequest({ params: userIdParamSchema, body: updateUserRoleSchema }),
     controller.updateRole
+  );
+  router.patch(
+    '/:userId/status',
+    requireAuth,
+    requireRole(['admin']),
+    validateRequest({ params: userIdParamSchema, body: updateUserStatusSchema }),
+    controller.updateStatus
   );
   router.get('/:userId', validateRequest({ params: userIdParamSchema }), controller.reserved);
 

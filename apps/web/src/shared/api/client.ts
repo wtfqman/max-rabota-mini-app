@@ -65,6 +65,24 @@ export const apiClient = {
         body: JSON.stringify({ role })
       }
     ),
+  updateTeamUserStatus: (userId: string, status: 'active' | 'blocked') =>
+    apiRequest<
+      ApiEnvelope<{
+        id: string;
+        status: 'active' | 'blocked' | 'deleted';
+        updatedAt: string;
+        hiddenAdsTotal?: number;
+        channelRemoval?: {
+          attempted: number;
+          removed: number;
+          failed: number;
+          skipped: number;
+        } | null;
+      }>
+    >(`/users/${encodeURIComponent(userId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    }),
   verifyMaxLaunch: (payload: VerifyMaxLaunchRequest) =>
     apiRequest<ApiEnvelope<VerifyMaxLaunchResponse>>('/auth/max/verify', {
       method: 'POST',

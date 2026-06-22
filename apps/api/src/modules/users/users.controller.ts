@@ -45,6 +45,17 @@ export class UsersController extends FoundationController {
     sendOk(response, serializeRoleUpdate(user));
   });
 
+  updateStatus = asyncHandler(async (request: Request, response: Response): Promise<void> => {
+    const actorId = this.requireUserId(request);
+    const result = await this.usersService.updateUserStatus(
+      actorId,
+      request.params.userId,
+      request.body as { status: 'active' | 'blocked' }
+    );
+
+    sendOk(response, serializeStatusUpdate(result));
+  });
+
   private requireUserId(request: Request): string {
     if (!request.auth?.userId) {
       throw new AppError('Authentication required', 401);
@@ -59,6 +70,18 @@ function serializeRoleUpdate(user: Awaited<ReturnType<UsersService['updateUserRo
     id: user.id,
     role: user.role.toLowerCase(),
     updatedAt: user.updatedAt.toISOString()
+  };
+}
+
+function serializeStatusUpdate(result: Awaited<ReturnType<UsersService['updateUserStatus']>>) {
+  const { user } = result;
+
+  return {
+    id: user.id,
+    status: user.status.toLowerCase(),
+    updatedAt: user.updatedAt.toISOString(),
+    hiddenAdsTotal: result.hiddenAdIds.length,
+    channelRemoval: result.channelRemoval
   };
 }
 

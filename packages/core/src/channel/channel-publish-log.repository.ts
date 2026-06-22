@@ -33,6 +33,60 @@ export class ChannelPublishLogRepository {
     });
   }
 
+  async findRecentActiveAttempt(data: {
+    adId: string;
+    maxChatId?: string | null;
+    since: Date;
+  }): Promise<ChannelPublishLog | null> {
+    return this.db.channelPublishLog.findFirst({
+      where: {
+        adId: data.adId,
+        maxChatId: data.maxChatId ?? undefined,
+        OR: [
+          {
+            status: ChannelPublishStatus.PENDING,
+            createdAt: {
+              gte: data.since
+            }
+          },
+          {
+            status: {
+              in: [ChannelPublishStatus.PUBLISHED, ChannelPublishStatus.REMOVE_FAILED]
+            },
+            publishedAt: {
+              gte: data.since
+            }
+          }
+        ]
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
+
+  async updatePendingPayload(
+    id: string,
+    data: {
+      payload?: Prisma.InputJsonValue;
+      publishedText?: string | null;
+      mediaStrategy?: string | null;
+      mediaAttachment?: Prisma.InputJsonValue | null;
+    }
+  ): Promise<ChannelPublishLog> {
+    return this.db.channelPublishLog.update({
+      where: {
+        id
+      },
+      data: {
+        payloadJson: data.payload ? JSON.stringify(data.payload) : undefined,
+        publishedText: data.publishedText,
+        mediaStrategy: data.mediaStrategy,
+        mediaAttachmentJson: data.mediaAttachment ? JSON.stringify(data.mediaAttachment) : undefined
+      }
+    });
+  }
+
   async markPublished(
     id: string,
     data: {
@@ -61,6 +115,18 @@ export class ChannelPublishLogRepository {
       data: {
         status: ChannelPublishStatus.FAILED,
         errorMessage
+      }
+    });
+  }
+
+  async markSkipped(id: string, reason: string): Promise<ChannelPublishLog> {
+    return this.db.channelPublishLog.update({
+      where: {
+        id
+      },
+      data: {
+        status: ChannelPublishStatus.SKIPPED,
+        errorMessage: reason
       }
     });
   }
