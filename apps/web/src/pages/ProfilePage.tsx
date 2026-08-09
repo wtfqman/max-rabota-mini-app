@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { BarChart3, Bell, Copy, CreditCard, Edit3, Eye, FileSearch, FileUser, Gift, Heart, ListChecks, RefreshCw, Save, Share2, ShieldCheck, Upload, Users, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowRight, BarChart3, Bell, Copy, CreditCard, Edit3, Eye, FileSearch, FileUser, Gift, Heart, ListChecks, RefreshCw, Save, Share2, ShieldCheck, Upload, Users, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '../app/store/app-store.js';
 import type { EditableProfile, UserPaymentOperation, UserProfilePayload } from '../features/ads/ad.types.js';
 import { apiClient } from '../shared/api/client.js';
@@ -14,7 +15,6 @@ import { ProfileHeader } from '../shared/ui/ProfileHeader.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
 import { Select } from '../shared/ui/Select.js';
 import { Textarea } from '../shared/ui/Textarea.js';
-import { TileCard } from '../shared/ui/TileCard.js';
 
 type ProfileFormState = {
   displayName: string;
@@ -290,7 +290,7 @@ export function ProfilePage() {
   const name = primaryName || profile.maxUsername || 'Профиль';
 
   return (
-    <AppPage>
+    <AppPage className="space-y-2.5">
       <ProfileHeader
         name={name}
         subtitle={profile.profile?.city ? `${profile.profile.city} в MAX` : 'Ваш кабинет в MAX'}
@@ -303,26 +303,42 @@ export function ProfilePage() {
       />
 
       {error ? (
-        <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm text-accent-green">
+        <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-xs font-semibold text-accent-green">
           {error}
         </div>
       ) : null}
 
       {saveNotice ? (
-        <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold text-accent-green">
+        <div className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-xs font-semibold text-accent-green">
           {saveNotice}
         </div>
       ) : null}
 
-      <SectionCard>
+      <SectionCard className="p-2.5">
         <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm font-black leading-tight text-text-primary">Публикации</h2>
+              <p className="truncate text-[11px] font-semibold leading-4 text-text-muted">
+                Пригл.: {profile.referral.referredTotal} · Бонус: {profile.referral.bonusPublications}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              <ActionButton className="min-h-9 px-2 text-xs" icon={isReferralCopied ? <Gift size={15} /> : <Copy size={15} />} onClick={copyReferralLink}>
+                {isReferralCopied ? 'OK' : 'Copy'}
+              </ActionButton>
+              <ActionButton className="min-h-9 px-2 text-xs" variant="secondary" icon={<Share2 size={15} />} onClick={shareReferralLink}>
+                Share
+              </ActionButton>
+            </div>
+          </div>
           <div className="grid grid-cols-4 gap-1.5 text-center">
             <BalanceChip label="куп." value={profile.stats.vacancyPublicationBalance.purchased} />
             <BalanceChip label="исп." value={profile.stats.vacancyPublicationBalance.used} />
             <BalanceChip label="ост." value={profile.stats.vacancyPublicationBalance.remaining} />
             <BalanceChip label="бонус" value={profile.stats.vacancyPublicationBalance.bonus} />
           </div>
-          <div className="grid grid-cols-3 gap-1.5 text-center">
+          <div className="hidden grid-cols-3 gap-1.5 text-center">
             <BalanceChip label="пригл." value={profile.referral.referredTotal} />
             <BalanceChip label="оплат." value={profile.referral.rewardedTotal} />
             <BalanceChip label="реф." value={profile.referral.bonusPublications} />
@@ -331,7 +347,7 @@ export function ProfilePage() {
             <p className="text-[11px] font-extrabold uppercase text-text-muted">Реферальная ссылка</p>
             <p className="mt-1 line-clamp-2 break-all text-[11px] font-bold leading-4 text-text-secondary">{referralInviteUrl}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="hidden grid-cols-2 gap-2">
             <ActionButton icon={isReferralCopied ? <Gift size={17} /> : <Copy size={17} />} onClick={copyReferralLink}>
               {isReferralCopied ? 'Скопировано' : 'Копировать'}
             </ActionButton>
@@ -344,19 +360,20 @@ export function ProfilePage() {
 
       {form ? (
         <SectionCard title="Профиль" description="Имя, описание, контакты и публичность профиля.">
-          <div className="grid gap-3">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-              <ActionButton type="button" icon={<Edit3 size={18} />} onClick={() => setEditing((value) => !value)}>
+          <div className="grid gap-2">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-1.5">
+              <ActionButton className="min-h-10 px-2 text-xs" type="button" icon={<Edit3 size={16} />} onClick={() => setEditing((value) => !value)}>
                 {editing ? 'Закрыть' : 'Редактировать'}
               </ActionButton>
-              <ActionButton type="button" variant="secondary" icon={<Eye size={18} />} onClick={() => setPreviewing((value) => !value)}>
+              <ActionButton className="min-h-10 px-2 text-xs" type="button" variant="secondary" icon={<Eye size={16} />} onClick={() => setPreviewing((value) => !value)}>
                 Preview
               </ActionButton>
               {editing ? (
                 <ActionButton
+                  className="min-h-10 px-2 text-xs"
                   type="button"
                   variant="secondary"
-                  icon={<X size={18} />}
+                  icon={<X size={16} />}
                   onClick={() => {
                     setForm(createProfileForm(profile));
                     setEditing(false);
@@ -457,81 +474,72 @@ export function ProfilePage() {
         />
       ) : null}
 
-      <section className="grid gap-3">
+      <section className="grid grid-cols-2 gap-2">
         {profile.role === 'admin' || profile.role === 'moderator' ? (
-          <TileCard
+          <CompactProfileTile
             to="/moderation"
             title="Подтверждение модерации"
             description="Проверить и опубликовать новые объявления"
-            icon={<ListChecks size={23} />}
-            tone="green"
+            icon={<ListChecks size={18} />}
           />
         ) : null}
         {profile.role === 'admin' ? (
-          <TileCard
+          <CompactProfileTile
             to="/team"
             title="Команда"
             description="Назначать админов и модераторов по MAX ID или username"
-            icon={<Users size={23} />}
-            tone="green"
+            icon={<Users size={18} />}
           />
         ) : null}
         {profile.role === 'admin' && financeDashboardEnabled ? (
-          <TileCard
+          <CompactProfileTile
             to="/finance"
             title="Финансы"
             description="Выручка, возвраты, net revenue и CSV export"
-            icon={<BarChart3 size={23} />}
-            tone="green"
+            icon={<BarChart3 size={18} />}
           />
         ) : null}
-        <TileCard
+        <CompactProfileTile
           to="/my-ads"
           title="Мои объявления"
           description="Редактировать, скрывать, повторно публиковать"
-          icon={<ListChecks size={23} />}
-          tone="green"
+          icon={<ListChecks size={18} />}
         />
         {applicationsEnabled ? (
-        <TileCard
+        <CompactProfileTile
           to="/applications"
           title="Мои отклики"
           description="Вакансии, на которые вы откликнулись, и статусы работодателя"
-          icon={<FileSearch size={23} />}
-          tone="green"
+          icon={<FileSearch size={18} />}
         />
         ) : null}
         {notificationsEnabled ? (
-          <TileCard
+          <CompactProfileTile
             to="/notifications"
             title="Уведомления"
             description="Статусы объявлений, платежи и важные события"
-            icon={<Bell size={23} />}
-            tone="green"
+            icon={<Bell size={18} />}
           />
         ) : null}
         {savedSearchesEnabled ? (
-          <TileCard
+          <CompactProfileTile
             to="/saved-searches"
             title="Сохранённые поиски"
             description="Подписки на новые объявления по фильтрам"
-            icon={<FileSearch size={23} />}
-            tone="green"
+            icon={<FileSearch size={18} />}
           />
         ) : null}
-        <TileCard
+        <CompactProfileTile
           to="/create/resume"
           title="Создать резюме"
           description="ФИО, специальность, опыт, контакт и зарплата"
-          icon={<FileUser size={23} />}
-          tone="green"
+          icon={<FileUser size={18} />}
         />
-        <TileCard
+        <CompactProfileTile
           to="/favorites"
           title="Избранное"
           description="Сохранённые вакансии, техника и материалы"
-          icon={<Heart size={23} />}
-          tone="green"
+          icon={<Heart size={18} />}
         />
       </section>
 
@@ -545,14 +553,37 @@ export function ProfilePage() {
 
       <PaymentHistorySection />
 
-      {profile.role === 'admin' || profile.role === 'moderator' ? (
-        <SectionCard title="Для модерации" description="Этот блок виден только пользователям с расширенными правами.">
-          <LinkButton to="/moderation" variant="secondary" icon={<ListChecks size={18} />}>
-            Очередь модерации
-          </LinkButton>
-        </SectionCard>
-      ) : null}
     </AppPage>
+  );
+}
+
+function CompactProfileTile({
+  to,
+  title,
+  description,
+  icon
+}: {
+  to: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      className="app-surface app-topline group grid min-h-[78px] grid-rows-[auto_1fr] rounded-panel p-2.5 transition duration-200 hover:translate-y-[-1px] hover:border-accent-green/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-panel border border-accent-green/22 bg-accent-greenSoft text-accent-green">
+          {icon}
+        </span>
+        <ArrowRight className="shrink-0 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-accent-green" size={14} />
+      </div>
+      <div className="min-w-0 self-end space-y-0.5">
+        <h2 className="line-clamp-2 text-[12px] font-black leading-[1.05] text-text-primary min-[380px]:text-[13px]">{title}</h2>
+        <p className="line-clamp-1 text-[10px] font-medium leading-3 text-text-secondary min-[380px]:text-[11px]">{description}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -593,7 +624,7 @@ function PaymentHistorySection() {
 
   return (
     <SectionCard title="История операций" description="Платежи, возвраты и связанные объявления без секретных платёжных данных.">
-      <div className="grid gap-3">
+      <div className="grid gap-2">
         {status === 'loading' ? <LoadingState /> : null}
         {status === 'error' ? (
           <div className="grid gap-2">
@@ -609,7 +640,7 @@ function PaymentHistorySection() {
         {status === 'ready' && items.length > 0 ? (
           <div className="grid gap-2">
             {items.map((item) => (
-              <article key={item.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-3">
+              <article key={item.id} className="rounded-panel border border-white/8 bg-surface-900/92 p-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-text-primary">{item.purposeLabel}</p>
@@ -620,7 +651,7 @@ function PaymentHistorySection() {
                     {Number(item.refundAmount) > 0 ? <p className="text-xs font-bold text-red-100">refund {item.refundAmount}</p> : null}
                   </div>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   <span className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-text-secondary">{paymentStatusLabel(item.status)}</span>
                   {item.packagePublications > 0 ? <span className="rounded-full border border-accent-green/25 px-2 py-1 text-xs font-bold text-accent-green">+{item.packagePublications} публикаций</span> : null}
                   {item.includesMediaFee ? <span className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-text-secondary">media fee</span> : null}
@@ -628,7 +659,7 @@ function PaymentHistorySection() {
                   {item.isPromotion ? <span className="rounded-full border border-white/10 px-2 py-1 text-xs font-bold text-text-secondary">promotion</span> : null}
                   {item.test ? <span className="rounded-full border border-amber-300/25 px-2 py-1 text-xs font-bold text-amber-100">test</span> : null}
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
                   <p className="min-w-0 truncate text-xs text-text-muted">{item.ad.title}</p>
                   <LinkButton to={getAdPath(item.ad)} variant="secondary" icon={<CreditCard size={16} />}>
                     Открыть объявление
@@ -654,12 +685,12 @@ function VerifiedContactsSection({
 }) {
   return (
     <SectionCard title="Подтверждённые контакты">
-      <div className="grid gap-3">
-        <div className="flex items-start gap-3 rounded-panel border border-white/10 bg-surface-900/92 p-3">
-          <ShieldCheck size={20} className="mt-0.5 shrink-0 text-accent-green" />
+      <div className="grid gap-2">
+        <div className="flex items-start gap-2 rounded-panel border border-white/10 bg-surface-900/92 p-2.5">
+          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-accent-green" />
           <div className="min-w-0">
             <p className="text-sm font-black text-text-primary">MAX-проверка для резюме</p>
-            <p className="mt-1 text-xs leading-5 text-text-secondary">
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-text-secondary">
               Для платной связи используется безопасный режим: покупатель получает возможность отправить запрос автору, сырой номер не раскрывается автоматически.
             </p>
           </div>
@@ -667,7 +698,7 @@ function VerifiedContactsSection({
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-text-muted">Статус</p>
-          <ActionButton type="button" variant="secondary" icon={<RefreshCw size={16} />} onClick={onReload}>
+          <ActionButton className="min-h-9 px-2 text-xs" type="button" variant="secondary" icon={<RefreshCw size={15} />} onClick={onReload}>
             Обновить
           </ActionButton>
         </div>
@@ -675,7 +706,7 @@ function VerifiedContactsSection({
         {status === 'loading' ? <p className="text-sm text-text-secondary">Проверяем контакты...</p> : null}
         {status === 'error' ? <p className="text-sm text-red-100">Не удалось загрузить подтверждённые контакты.</p> : null}
         {status !== 'loading' && status !== 'error' && items.length === 0 ? (
-          <p className="text-sm leading-6 text-text-secondary">
+          <p className="text-xs leading-5 text-text-secondary">
             Подтверждённых контактов пока нет. При создании резюме нажмите «Подтвердить через MAX» или используйте кнопку через бота.
           </p>
         ) : null}
@@ -683,7 +714,7 @@ function VerifiedContactsSection({
         {items.length > 0 ? (
           <div className="grid gap-2">
             {items.map((item) => (
-              <div key={item.id} className="rounded-panel border border-white/10 bg-surface-950/50 p-3">
+              <div key={item.id} className="rounded-panel border border-white/10 bg-surface-950/50 p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="min-w-0 truncate text-sm font-black text-text-primary">{item.maskedValue}</p>
                   <span className="shrink-0 rounded-full border border-accent-green/25 px-2 py-1 text-xs font-bold text-accent-green">
@@ -769,8 +800,8 @@ function normalizeProfilePayload(profile: UserProfilePayload): UserProfilePayloa
 
 function BalanceChip({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-0 rounded-panel border border-white/10 bg-surface-900/92 px-1.5 py-2">
-      <p className="text-base font-black leading-none text-text-primary">{value}</p>
+    <div className="min-w-0 rounded-panel border border-white/10 bg-surface-900/92 px-1.5 py-1.5">
+      <p className="text-sm font-black leading-none text-text-primary">{value}</p>
       <p className="mt-1 truncate text-[10px] font-bold leading-3 text-text-muted">{label}</p>
     </div>
   );
