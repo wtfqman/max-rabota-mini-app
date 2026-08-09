@@ -33,7 +33,10 @@ export class AuthService extends FoundationService {
         username: initData.user.username,
         name: [initData.user.first_name, initData.user.last_name].filter(Boolean).join(' ') || null
       },
-      initData.user.language_code
+      initData.user.language_code,
+      {
+        startParam: initData.startParam
+      }
     );
 
     if (user.status !== UserStatus.ACTIVE) {

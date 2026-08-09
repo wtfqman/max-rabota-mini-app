@@ -11,20 +11,26 @@
     "dev": "npm run dev:api",
     "dev:api": "tsx watch apps/api/src/main.ts",
     "dev:bot": "tsx watch apps/bot/src/main.ts",
+    "dev:telegram-bot": "tsx watch apps/telegram-bot/src/main.ts",
     "dev:web": "vite --config apps/web/vite.config.ts --host 0.0.0.0",
     "start:api": "node dist/apps/api/src/main.js",
     "start:bot": "node dist/apps/bot/src/main.js",
+    "start:telegram-bot": "node dist/apps/telegram-bot/src/main.js",
     "build": "npm run build:server && npm run build:web",
     "build:prod": "npm run build",
     "build:server": "node scripts/clean-server-dist.mjs && tsc -p tsconfig.json && tsc-alias -p tsconfig.json && node scripts/rewrite-dist-package-imports.mjs",
     "build:web": "vite build --config apps/web/vite.config.ts",
     "deploy:check": "npm run typecheck && npm run lint && npm run build:prod",
+    "test": "tsx tests/business-rules.test.ts && tsx tests/telegram-sync.test.ts",
     "pm2:start": "pm2 start deploy/pm2/ecosystem.config.cjs --env production",
     "pm2:restart": "pm2 restart deploy/pm2/ecosystem.config.cjs --env production",
     "pm2:stop": "pm2 stop deploy/pm2/ecosystem.config.cjs",
-    "pm2:logs": "pm2 logs rabst24-api rabst24-bot",
+    "pm2:logs": "pm2 logs rabst24-api rabst24-bot rabst24-telegram-bot",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
     "lint": "eslint .",
+    "audit:runtime": "node scripts/audit-production-runtime.mjs",
+    "audit:billing": "node scripts/audit-billing-integrity.mjs",
+    "audit:unpaid-vacancies": "node scripts/audit-unpaid-vacancies.mjs",
     "prisma:generate": "prisma generate --schema packages/db/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema packages/db/prisma/schema.prisma",
     "prisma:migrate:deploy": "prisma migrate deploy --schema packages/db/prisma/schema.prisma",
@@ -38,6 +44,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^4.21.2",
+    "grammy": "^1.45.1",
     "helmet": "^8.1.0",
     "lucide-react": "^0.544.0",
     "pino": "^9.7.0",
@@ -69,5 +76,8 @@
   },
   "engines": {
     "node": ">=20.20.0"
+  },
+  "overrides": {
+    "esbuild": "0.28.1"
   }
 }

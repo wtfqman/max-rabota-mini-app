@@ -1,16 +1,6 @@
-import {
-  AdStatus,
-  UserRole,
-  UserStatus,
-  type Ad,
-  type AdContact,
-  type PrismaClient,
-  type User
-} from '@rabst24/db';
-import { config, logger } from '@rabst24/config';
-import type { MaxApiClient, MaxButton, MaxInlineKeyboardAttachment } from '@rabst24/max-api';
-
-const MODERATION_START_PARAM = 'moderation';
+import { AdStatus, UserRole, UserStatus, type Ad, type AdContact, type PrismaClient, type User } from '@rabst24/db';
+import { logger } from '@rabst24/config';
+import type { NotificationService } from '../notifications/notifications.service.js';
 
 type ModerationNotificationAd = Ad & {
   owner?: Pick<User, 'id' | 'maxUserId' | 'maxUsername' | 'firstName' | 'lastName' | 'displayName'> | null;
@@ -18,13 +8,21 @@ type ModerationNotificationAd = Ad & {
 };
 
 export class ModerationNotificationService {
-  constructor(
-    private readonly db: PrismaClient,
-    private readonly maxApiClient: MaxApiClient
-  ) {}
+  private notificationService: NotificationService | null = null;
+
+  constructor(private readonly db: PrismaClient) {}
+
+  setNotificationService(notificationService: NotificationService): void {
+    this.notificationService = notificationService;
+  }
 
   async notifyNewAd(ad: Ad, ownerId?: string): Promise<void> {
     if (ad.status !== AdStatus.PENDING_MODERATION || ad.isTest) {
+      return;
+    }
+
+    if (!this.notificationService) {
+      logger.warn({ adId: ad.id }, 'NotificationService is not attached; moderation notification skipped');
       return;
     }
 
@@ -34,12 +32,10 @@ export class ModerationNotificationService {
           in: [UserRole.ADMIN, UserRole.MODERATOR]
         },
         status: UserStatus.ACTIVE,
-        deletedAt: null,
-        id: ownerId ? { not: ownerId } : undefined
+        deletedAt: null
       },
       select: {
         id: true,
-        maxUserId: true,
         role: true
       }
     });
@@ -52,31 +48,26 @@ export class ModerationNotificationService {
     const notificationAd = (await this.loadNotificationAd(ad.id)) ?? ad;
 
     await Promise.allSettled(
-      recipients.map(async (recipient) => {
-        try {
-          await this.maxApiClient.sendMessage({
-            userId: recipient.maxUserId,
-            disableLinkPreview: true,
-            body: {
-              text: this.formatMessage(notificationAd),
-              attachments: [this.createKeyboard()]
-            }
-          });
-        } catch (error) {
-          logger.warn(
-            {
-              err: error,
-              adId: ad.id,
-              recipientId: recipient.id,
-              recipientRole: recipient.role.toLowerCase()
-            },
-            'Failed to send moderation notification'
-          );
-        }
-      })
+      recipients.map((recipient) =>
+        this.notificationService?.notify({
+          userId: recipient.id,
+          type: 'AD_SUBMITTED_MODERATION',
+          title: 'Новое объявление на модерацию',
+          body: this.formatMessage(notificationAd),
+          category: 'ad_status',
+          critical: true,
+          idempotencyKey: `moderation:ad:${ad.id}:recipient:${recipient.id}:submitted`,
+          deepLink: this.notificationService.buildModerationLink(ad.id),
+          payload: {
+            adId: ad.id,
+            ownerId,
+            recipientRole: recipient.role.toLowerCase()
+          }
+        })
+      )
     );
 
-    logger.info({ adId: ad.id, recipients: recipients.length }, 'Moderation notification sent');
+    logger.info({ adId: ad.id, ownerId, recipients: recipients.length }, 'Moderation notification queued');
   }
 
   private async loadNotificationAd(adId: string): Promise<ModerationNotificationAd | null> {
@@ -115,15 +106,11 @@ export class ModerationNotificationService {
 
   private formatMessage(ad: ModerationNotificationAd): string {
     return [
-      'Новое объявление на модерацию',
-      '',
       `${this.getTypeLabel(ad.type.toLowerCase())}: ${ad.title}`,
       ad.districtText ? `Район: ${ad.districtText}` : null,
       ad.city ? `Город: ${ad.city}` : null,
-      '',
       ...this.formatOwnerLines(ad.owner),
       ...this.formatContactLines(ad.contacts),
-      '',
       'Откройте очередь модерации, чтобы проверить и опубликовать.'
     ]
       .filter(Boolean)
@@ -160,58 +147,6 @@ export class ModerationNotificationService {
 
       return `${label}${preferred}: ${contact.value}`;
     });
-  }
-
-  private createKeyboard(): MaxInlineKeyboardAttachment {
-    return {
-      type: 'inline_keyboard',
-      payload: {
-        buttons: [
-          [
-            this.createOpenModerationButton()
-          ]
-        ]
-      }
-    };
-  }
-
-  private createOpenModerationButton(): MaxButton {
-    const webApp = this.getMiniAppLaunchValue(MODERATION_START_PARAM);
-
-    if (webApp) {
-      return {
-        type: 'open_app',
-        text: 'Открыть модерацию',
-        web_app: webApp,
-        payload: MODERATION_START_PARAM
-      };
-    }
-
-    return {
-      type: 'link',
-      text: 'Открыть модерацию',
-      url: `${config.miniAppUrl.replace(/\/+$/, '')}/moderation`
-    };
-  }
-
-  private getMiniAppLaunchValue(payload: string): string | null {
-    const miniAppWebApp = config.max.miniAppWebApp?.trim();
-
-    if (!miniAppWebApp) {
-      return null;
-    }
-
-    if (!miniAppWebApp.startsWith('https://') && !miniAppWebApp.startsWith('http://')) {
-      return miniAppWebApp;
-    }
-
-    try {
-      const url = new URL(miniAppWebApp);
-      url.searchParams.set('startapp', payload);
-      return url.toString();
-    } catch {
-      return miniAppWebApp;
-    }
   }
 
   private getTypeLabel(type: string): string {

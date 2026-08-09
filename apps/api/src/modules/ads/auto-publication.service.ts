@@ -10,6 +10,8 @@ import {
   type AdService as CoreAdService,
   type ChannelPublishingService as CoreChannelPublishingService
 } from '@rabst24/core';
+import { AppError } from '@rabst24/shared';
+import type { AdPaymentService } from '../payments/ad-payment.service.js';
 
 const intervalMs = 10 * 60 * 1000;
 const batchSize = 25;
@@ -21,7 +23,8 @@ export class AutoPublicationService {
   constructor(
     private readonly db: PrismaClient,
     private readonly adService: CoreAdService,
-    private readonly channelPublishingService: CoreChannelPublishingService
+    private readonly channelPublishingService: CoreChannelPublishingService,
+    private readonly adPaymentService: AdPaymentService
   ) {}
 
   start(): void {
@@ -151,6 +154,18 @@ export class AutoPublicationService {
 
     if (latestNextPublishAt && latestNextPublishAt > now) {
       return;
+    }
+
+    try {
+      await this.adPaymentService.assertAdHasFreshSucceededPaymentForPublication(latestAd.id);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 402) {
+        await this.disableAutoRepeat(latestAd.id, latestAd.metadataJson, latestSettings);
+        logger.warn({ err: error, adId: latestAd.id }, 'Auto publication disabled: payment is required');
+        return;
+      }
+
+      throw error;
     }
 
     try {

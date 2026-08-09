@@ -3,7 +3,6 @@ import { X } from 'lucide-react';
 import { apiClient } from '../../shared/api/client.js';
 import { ActionButton } from '../../shared/ui/ActionButton.js';
 import { Input } from '../../shared/ui/Input.js';
-import { Select } from '../../shared/ui/Select.js';
 import { SuggestionInput } from '../../shared/ui/SuggestionInput.js';
 
 export type AdFiltersKind = 'vacancy' | 'resume' | 'equipment' | 'material' | 'tool';
@@ -11,8 +10,6 @@ export type AdFiltersKind = 'vacancy' | 'resume' | 'equipment' | 'material' | 't
 export interface AdFiltersState {
   category: string;
   district: string;
-  schedule: string;
-  experience: string;
   priceFrom: string;
   priceTo: string;
 }
@@ -29,19 +26,9 @@ interface AdFiltersDrawerProps {
 const emptyFilters: AdFiltersState = {
   category: '',
   district: '',
-  schedule: '',
-  experience: '',
   priceFrom: '',
   priceTo: ''
 };
-
-const experienceOptions = [
-  { value: '', label: 'Любой опыт' },
-  { value: 'без опыта', label: 'Без опыта' },
-  { value: '1', label: 'От 1 года' },
-  { value: '3', label: 'От 3 лет' },
-  { value: '5', label: 'От 5 лет' }
-];
 
 const loadCategorySuggestions = async (q?: string) => (await apiClient.listCategorySuggestions(q)).data;
 const loadDistrictSuggestions = async (q?: string) => (await apiClient.listDistrictSuggestions(q)).data;
@@ -55,23 +42,13 @@ export function AdFiltersDrawer({
   onReset
 }: AdFiltersDrawerProps) {
   const copy = useMemo(() => getFilterCopy(kind), [kind]);
-  const [draft, setDraft] = useState<AdFiltersState>(() => normalizeFiltersForKind(kind, filters));
-  const shouldShowVacancyOnlyFilters = kind === 'vacancy';
+  const [draft, setDraft] = useState<AdFiltersState>(() => normalizeFiltersForKind(filters));
 
   useEffect(() => {
     if (open) {
-      setDraft(normalizeFiltersForKind(kind, filters));
+      setDraft(normalizeFiltersForKind(filters));
     }
-  }, [
-    open,
-    kind,
-    filters.category,
-    filters.district,
-    filters.schedule,
-    filters.experience,
-    filters.priceFrom,
-    filters.priceTo
-  ]);
+  }, [open, filters.category, filters.district, filters.priceFrom, filters.priceTo]);
 
   if (!open) {
     return null;
@@ -88,7 +65,7 @@ export function AdFiltersDrawer({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onApply(normalizeFiltersForKind(kind, draft));
+    onApply(normalizeFiltersForKind(draft));
   };
 
   return (
@@ -130,39 +107,13 @@ export function AdFiltersDrawer({
               loadSuggestions={loadDistrictSuggestions}
             />
 
-            {shouldShowVacancyOnlyFilters ? (
-              <div className="grid gap-4">
-                <Select
-                  name="experience"
-                  label="Опыт"
-                  value={draft.experience}
-                  onChange={updateField('experience')}
-                  options={experienceOptions}
-                />
-              </div>
-            ) : null}
-
             <div className="rounded-[22px] border border-white/8 bg-surface-950/35 p-3">
               <p className="mb-3 text-xs font-extrabold uppercase tracking-[0.1em] text-text-secondary">
                 {copy.priceLabel}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <Input
-                  name="priceFrom"
-                  label="От"
-                  placeholder="0"
-                  inputMode="numeric"
-                  value={draft.priceFrom}
-                  onChange={updateField('priceFrom')}
-                />
-                <Input
-                  name="priceTo"
-                  label="До"
-                  placeholder="150000"
-                  inputMode="numeric"
-                  value={draft.priceTo}
-                  onChange={updateField('priceTo')}
-                />
+                <Input name="priceFrom" label="От" placeholder="0" inputMode="numeric" value={draft.priceFrom} onChange={updateField('priceFrom')} />
+                <Input name="priceTo" label="До" placeholder="150000" inputMode="numeric" value={draft.priceTo} onChange={updateField('priceTo')} />
               </div>
             </div>
           </div>
@@ -179,25 +130,14 @@ export function AdFiltersDrawer({
   );
 }
 
-function normalizeFiltersForKind(kind: AdFiltersKind, filters: Partial<AdFiltersState>): AdFiltersState {
-  const normalized = {
+function normalizeFiltersForKind(filters: Partial<AdFiltersState>): AdFiltersState {
+  return {
     ...emptyFilters,
-    ...filters,
     category: normalizeText(filters.category),
     district: normalizeText(filters.district),
-    schedule: normalizeText(filters.schedule),
-    experience: normalizeText(filters.experience),
     priceFrom: normalizeMoney(filters.priceFrom),
     priceTo: normalizeMoney(filters.priceTo)
   };
-
-  normalized.schedule = '';
-
-  if (kind !== 'vacancy') {
-    normalized.experience = '';
-  }
-
-  return normalized;
 }
 
 function normalizeText(value?: string): string {
@@ -212,7 +152,7 @@ function getFilterCopy(kind: AdFiltersKind) {
   if (kind === 'vacancy') {
     return {
       title: 'Подобрать вакансии',
-      description: 'Оставили только параметры, которые реально помогают найти работу.',
+      description: 'Оставлены базовые параметры поиска: сфера, район и зарплата.',
       categoryLabel: 'Сфера работы',
       categoryPlaceholder: 'Строительство, водители, склад',
       priceLabel: 'Зарплата, ₽',
@@ -223,10 +163,10 @@ function getFilterCopy(kind: AdFiltersKind) {
   if (kind === 'resume') {
     return {
       title: 'Найти специалистов',
-      description: 'Фильтруйте анкеты по роли, району и желаемой зарплате.',
-      categoryLabel: 'Специальность',
+      description: 'Ищите резюме по профессии, району и желаемой сумме.',
+      categoryLabel: 'Профессия',
       categoryPlaceholder: 'Монолитчик, отделочник, крановщик',
-      priceLabel: 'Желаемая зарплата, ₽',
+      priceLabel: 'Желаемая сумма, ₽',
       submitLabel: 'Показать резюме'
     };
   }
@@ -234,10 +174,10 @@ function getFilterCopy(kind: AdFiltersKind) {
   if (kind === 'equipment') {
     return {
       title: 'Подобрать технику',
-      description: 'Тип техники, район и цена без лишних полей про график работы.',
+      description: 'Базовый поиск по типу, району и стоимости.',
       categoryLabel: 'Тип техники',
       categoryPlaceholder: 'Экскаватор, самосвал, автовышка',
-      priceLabel: 'Цена или аренда, ₽',
+      priceLabel: 'Стоимость, ₽',
       submitLabel: 'Показать технику'
     };
   }
@@ -245,7 +185,7 @@ function getFilterCopy(kind: AdFiltersKind) {
   if (kind === 'material') {
     return {
       title: 'Подобрать материалы',
-      description: 'Категория, район и цена: только то, что нужно для закупки.',
+      description: 'Категория, район и цена без лишних параметров.',
       categoryLabel: 'Категория материала',
       categoryPlaceholder: 'Бетон, кирпич, утеплитель',
       priceLabel: 'Цена, ₽',
@@ -255,7 +195,7 @@ function getFilterCopy(kind: AdFiltersKind) {
 
   return {
     title: 'Подобрать инструменты',
-    description: 'Категория, район и цена без лишних параметров из вакансий.',
+    description: 'Категория, район и цена без расширенных характеристик.',
     categoryLabel: 'Категория инструмента',
     categoryPlaceholder: 'Перфоратор, леса, лазерный уровень',
     priceLabel: 'Цена, ₽',

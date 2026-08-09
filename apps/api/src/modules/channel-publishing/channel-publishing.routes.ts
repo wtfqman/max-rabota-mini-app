@@ -17,7 +17,8 @@ export function createChannelPublishingRouter(container: ApiContainer): Router {
   const service = new ChannelPublishingModuleService(
     repository,
     container.adService,
-    container.channelPublishingService
+    container.channelPublishingService,
+    container.adPaymentService
   );
   const controller = new ChannelPublishingController(service);
   const adminOnly = [requireAuth, requireRole(['admin', 'moderator'])];

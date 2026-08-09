@@ -60,6 +60,10 @@ export type MaxButton =
       type: 'message';
       text: string;
       payload?: string;
+    }
+  | {
+      type: 'request_contact';
+      text: string;
     };
 
 export interface MaxInlineKeyboardAttachment {

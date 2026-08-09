@@ -14,7 +14,8 @@ export function createAuthRouter(container: ApiContainer): Router {
   const repository = new AuthRepository(container.db);
   const maxInitDataValidator = new MaxInitDataValidator({
     botToken: config.max.botToken,
-    maxAgeSeconds: config.max.initDataMaxAgeSeconds
+    maxAgeSeconds: config.max.initDataMaxAgeSeconds,
+    signatureCheckEnabled: config.max.initDataSignatureCheckEnabled
   });
   const sessionTokenService = new SessionTokenService({
     secret: config.session.secret,

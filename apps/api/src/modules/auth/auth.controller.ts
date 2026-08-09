@@ -12,16 +12,34 @@ export class AuthController extends FoundationController {
 
   verifyMaxLaunch = asyncHandler(async (request: Request, response: Response): Promise<void> => {
     const body = request.body as Partial<VerifyMaxLaunchDto>;
-    request.log.info(
-      {
-        platform: body.platform,
-        initDataPreview: typeof body.initData === 'string' ? body.initData.slice(0, 500) : null
-      },
-      'Received MAX init data'
-    );
+    const initDataSummary = summarizeInitData(body.initData);
 
-    const payload = await this.authService.verifyMaxLaunch(request.body as VerifyMaxLaunchDto);
-    sendOk(response, payload);
+    request.log.info({ platform: body.platform, ...initDataSummary }, '[MAX_AUTH] received init data');
+
+    try {
+      const payload = await this.authService.verifyMaxLaunch(request.body as VerifyMaxLaunchDto);
+      request.log.info(
+        {
+          platform: payload.launch.platform,
+          userId: payload.user.id,
+          startParam: payload.launch.startParam ?? null,
+          authDate: payload.launch.authDate
+        },
+        '[MAX_AUTH] verified'
+      );
+
+      sendOk(response, payload);
+    } catch (error) {
+      request.log.warn(
+        {
+          platform: body.platform,
+          ...initDataSummary,
+          error: error instanceof Error ? error.message : 'Unknown MAX auth error'
+        },
+        '[MAX_AUTH] verification failed'
+      );
+      throw error;
+    }
   });
 
   createDevSession = asyncHandler(async (request: Request, response: Response): Promise<void> => {
@@ -29,4 +47,63 @@ export class AuthController extends FoundationController {
     const payload = await this.authService.createDevSession();
     sendOk(response, payload);
   });
+}
+
+function summarizeInitData(initData: unknown) {
+  if (typeof initData !== 'string') {
+    return {
+      initDataLength: 0,
+      hasHash: false,
+      hasAuthDate: false,
+      hasUser: false,
+      startParam: null
+    };
+  }
+
+  const params = parseInitDataSummaryParams(initData);
+
+  return {
+    initDataLength: initData.length,
+    hasHash: params.has('hash'),
+    hasAuthDate: params.has('auth_date'),
+    hasUser: params.has('user'),
+    startParam: params.get('start_param') ?? params.get('startapp') ?? null
+  };
+}
+
+function parseInitDataSummaryParams(raw: string): URLSearchParams {
+  const candidates = [raw, safeDecode(raw)];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim().replace(/^[?#]/, '');
+    const topLevel = new URLSearchParams(trimmed);
+
+    if (topLevel.has('hash')) {
+      return topLevel;
+    }
+
+    for (const key of ['WebAppData', 'webAppData', 'maxWebAppData', 'initData', 'appData']) {
+      const nested = topLevel.get(key);
+
+      if (!nested) {
+        continue;
+      }
+
+      const nestedParams = new URLSearchParams(safeDecode(nested).replace(/^[?#]/, ''));
+
+      if (nestedParams.has('hash')) {
+        return nestedParams;
+      }
+    }
+  }
+
+  return new URLSearchParams(raw.trim().replace(/^[?#]/, ''));
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

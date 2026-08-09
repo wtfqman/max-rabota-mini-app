@@ -48,10 +48,61 @@ export const requireAuth: RequestHandler = async (request, _response, next) => {
       role: user.role.toLowerCase()
     };
 
+    request.log.info(
+      {
+        userId: user.id,
+        role: user.role.toLowerCase(),
+        status: user.status.toLowerCase()
+      },
+      '[MAX_AUTH] session verified'
+    );
+
     next();
   } catch (error) {
+    request.log.warn(
+      {
+        hasAuthorization: Boolean(request.header('authorization')),
+        error: error instanceof Error ? error.message : 'Unknown auth error'
+      },
+      '[MAX_AUTH] session verification failed'
+    );
     next(error);
   }
+};
+
+export const optionalAuth: RequestHandler = async (request, _response, next) => {
+  const header = request.header('authorization');
+
+  if (!header?.startsWith('Bearer ')) {
+    next();
+    return;
+  }
+
+  try {
+    const claims = verifySessionToken(header.slice('Bearer '.length));
+    const user = await prisma.user.findFirst({
+      where: {
+        id: claims.sub,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        role: true,
+        status: true
+      }
+    });
+
+    if (user && user.status === UserStatus.ACTIVE) {
+      request.auth = {
+        userId: user.id,
+        role: user.role.toLowerCase()
+      };
+    }
+  } catch {
+    // Public routes stay public; invalid optional auth simply means anonymous viewer.
+  }
+
+  next();
 };
 
 export function requireRole(roles: string[]): RequestHandler {

@@ -12,6 +12,10 @@ type ErrorContext =
   | 'reviews_load'
   | 'review_submit'
   | 'my_ads_load'
+  | 'applications_load'
+  | 'application_submit'
+  | 'application_status'
+  | 'application_withdraw'
   | 'vacancy_submit'
   | 'resume_submit'
   | 'equipment_submit'
@@ -65,6 +69,22 @@ const messages: Record<ErrorContext, { default: string; auth: string }> = {
   },
   my_ads_load: {
     default: 'Не удалось загрузить ваши объявления. Попробуйте ещё раз.',
+    auth: authMessage
+  },
+  applications_load: {
+    default: 'Не удалось загрузить отклики. Попробуйте ещё раз.',
+    auth: authMessage
+  },
+  application_submit: {
+    default: 'Не удалось отправить отклик. Проверьте сообщение и контакт.',
+    auth: authMessage
+  },
+  application_status: {
+    default: 'Не удалось обновить статус отклика. Попробуйте ещё раз.',
+    auth: authMessage
+  },
+  application_withdraw: {
+    default: 'Не удалось отозвать отклик. Попробуйте ещё раз.',
     auth: authMessage
   },
   vacancy_submit: {
@@ -164,6 +184,14 @@ function normalizeKnownTechnicalMessage(message: string): string | null {
     lower.includes('unauthorized')
   ) {
     return authMessage;
+  }
+
+  if (
+    lower.includes('payment is required') ||
+    lower.includes('new payment is required') ||
+    lower.includes('repeat publication from owner cabinet')
+  ) {
+    return 'Перед публикацией нужно оплатить объявление.';
   }
 
   if (lower.includes('pending moderation')) {

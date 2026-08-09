@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Ban, CheckCircle2, Copy, Crown, RefreshCw, Search, ShieldCheck, UserCog, Users } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Ban, CheckCircle2, Copy, Crown, RefreshCw, Save, Search, ShieldCheck, Sparkles, UserCog, Users } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
 import type { TeamUser } from '../features/ads/ad.types.js';
+import type { PromotionProduct } from '../features/promotions/promotion.types.js';
 import { apiClient } from '../shared/api/client.js';
+import type { AdminAdAnalyticsDashboard } from '../shared/api/client.js';
 import { ApiError } from '../shared/api/http.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AppPage } from '../shared/ui/AppPage.js';
@@ -10,6 +12,7 @@ import { EmptyState } from '../shared/ui/EmptyState.js';
 import { Input } from '../shared/ui/Input.js';
 import { LoadingState } from '../shared/ui/LoadingState.js';
 import { SectionCard } from '../shared/ui/SectionCard.js';
+import { Select } from '../shared/ui/Select.js';
 import { StatChip } from '../shared/ui/StatChip.js';
 
 type TeamRole = TeamUser['role'];
@@ -23,6 +26,8 @@ const roleOptions: Array<{ role: TeamRole; label: string }> = [
 
 export function TeamPage() {
   const currentUser = useAppStore((state) => state.user);
+  const analyticsEnabled = useAppStore((state) => state.features.AD_ANALYTICS_ENABLED);
+  const promotionsEnabled = useAppStore((state) => state.features.PROMOTIONS_ENABLED);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [users, setUsers] = useState<TeamUser[]>([]);
@@ -67,8 +72,6 @@ export function TeamPage() {
       active = false;
     };
   }, [isAdmin, reloadKey, submittedQuery]);
-
-  const adminsCount = useMemo(() => users.filter((user) => user.role === 'admin').length, [users]);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -189,6 +192,10 @@ export function TeamPage() {
         </form>
       </SectionCard>
 
+      {analyticsEnabled ? <AdminAnalyticsPanel /> : null}
+
+      {promotionsEnabled ? <PromotionAdminPanel /> : null}
+
       {message ? (
         <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold leading-6 text-accent-green">
           {message}
@@ -229,7 +236,6 @@ export function TeamPage() {
               key={user.id}
               user={user}
               currentUserId={currentUser.id}
-              adminsCount={adminsCount}
               updating={updatingUserId === user.id}
               onCopyMaxId={copyMaxId}
               onUpdateRole={updateRole}
@@ -245,7 +251,6 @@ export function TeamPage() {
 function TeamUserCard({
   user,
   currentUserId,
-  adminsCount,
   updating,
   onCopyMaxId,
   onUpdateRole,
@@ -253,16 +258,14 @@ function TeamUserCard({
 }: {
   user: TeamUser;
   currentUserId: string | null;
-  adminsCount: number;
   updating: boolean;
   onCopyMaxId: (maxUserId: string) => void;
   onUpdateRole: (user: TeamUser, role: TeamRole) => void;
   onUpdateStatus: (user: TeamUser, status: Extract<TeamStatus, 'active' | 'blocked'>) => void;
 }) {
   const isSelf = user.id === currentUserId;
-  const isLastAdmin = user.role === 'admin' && adminsCount <= 1;
   const name = getUserName(user);
-  const canBlock = !isSelf && user.status !== 'deleted' && !(isLastAdmin && user.status === 'active');
+  const canBlock = !isSelf && user.status !== 'deleted';
 
   return (
     <article className="app-surface rounded-panel border border-white/8 p-4">
@@ -303,8 +306,7 @@ function TeamUserCard({
             const disabled =
               updating ||
               user.role === option.role ||
-              (isSelf && option.role !== 'admin') ||
-              (isLastAdmin && option.role !== 'admin');
+              (isSelf && option.role !== 'admin');
 
             return (
               <ActionButton
@@ -321,7 +323,6 @@ function TeamUserCard({
           })}
         </div>
         {isSelf ? <p className="text-xs leading-5 text-text-muted">Себе нельзя снять роль админа.</p> : null}
-        {isLastAdmin ? <p className="text-xs leading-5 text-text-muted">Последнего админа снять нельзя.</p> : null}
       </div>
 
       <div className="mt-4 grid gap-2">
@@ -350,6 +351,295 @@ function TeamUserCard({
         {isSelf ? <p className="text-xs leading-5 text-text-muted">Свой аккаунт заблокировать нельзя.</p> : null}
       </div>
     </article>
+  );
+}
+
+function AdminAnalyticsPanel() {
+  const [dashboard, setDashboard] = useState<AdminAdAnalyticsDashboard | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setStatus('loading');
+    setError(null);
+
+    apiClient
+      .getAdminAdAnalytics(30)
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setDashboard(response.data);
+        setStatus('ready');
+      })
+      .catch((requestError) => {
+        if (!active) {
+          return;
+        }
+
+        setError(getTeamError(requestError));
+        setStatus('error');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  return (
+    <SectionCard title="Аналитика объявлений" description="Агрегаты за 30 дней без раскрытия посетителей владельцам объявлений.">
+      <div className="grid gap-3">
+        {status === 'loading' ? <LoadingState /> : null}
+        {status === 'error' ? (
+          <EmptyState
+            title="Не удалось загрузить аналитику"
+            description={error ?? 'Попробуйте обновить сводку.'}
+            action={
+              <ActionButton icon={<RefreshCw size={18} />} onClick={() => setReloadKey((value) => value + 1)}>
+                Обновить
+              </ActionButton>
+            }
+          />
+        ) : null}
+        {status === 'ready' && dashboard ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <StatChip label="активные пользователи" value={String(dashboard.activeUsers)} tone="green" />
+              <StatChip label="публичные объявления" value={String(dashboard.publishedAds)} />
+              <StatChip label="просмотры" value={String(dashboard.totals.views)} />
+              <StatChip label="контакты" value={String(getContactActions(dashboard))} />
+              <StatChip label="отклики" value={String(dashboard.totals.applications)} />
+              <StatChip label="конверсия в контакт" value={`${dashboard.conversion.viewToContact}%`} tone="green" />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <AdminAnalyticsList
+                title="Категории"
+                empty="Категорий пока нет"
+                items={dashboard.popularCategories.map((item) => ({
+                  key: `${item.type}-${item.category}`,
+                  label: `${item.category} · ${item.type}`,
+                  value: item.ads
+                }))}
+              />
+              <AdminAnalyticsList
+                title="Профессии"
+                empty="Профессий пока нет"
+                items={dashboard.popularProfessions.map((item) => ({
+                  key: `${item.type}-${item.profession}`,
+                  label: `${item.profession} · ${item.type}`,
+                  value: item.ads
+                }))}
+              />
+              <AdminAnalyticsList
+                title="Top ads"
+                empty="Метрик пока нет"
+                items={dashboard.topAds.map((item) => ({
+                  key: item.id,
+                  label: item.title,
+                  value: item.totals.views
+                }))}
+              />
+            </div>
+          </>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
+}
+
+function AdminAnalyticsList({
+  title,
+  empty,
+  items
+}: {
+  title: string;
+  empty: string;
+  items: Array<{ key: string; label: string; value: number }>;
+}) {
+  return (
+    <div className="rounded-panel border border-white/10 bg-surface-950/50 p-3">
+      <p className="text-xs font-extrabold uppercase tracking-[0.12em] text-text-muted">{title}</p>
+      {items.length === 0 ? <p className="mt-2 text-sm text-text-secondary">{empty}</p> : null}
+      <div className="mt-2 grid gap-2">
+        {items.slice(0, 5).map((item) => (
+          <div key={item.key} className="flex items-center justify-between gap-2 rounded-panel border border-white/8 bg-surface-900/80 px-3 py-2">
+            <span className="min-w-0 truncate text-sm font-bold text-text-primary">{item.label}</span>
+            <span className="shrink-0 text-sm font-extrabold text-accent-green">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function getContactActions(dashboard: AdminAdAnalyticsDashboard): number {
+  return (
+    dashboard.totals.contactOpens +
+    dashboard.totals.phoneClicks +
+    dashboard.totals.emailClicks +
+    dashboard.totals.maxClicks +
+    dashboard.totals.websiteClicks
+  );
+}
+
+function PromotionAdminPanel() {
+  const [products, setProducts] = useState<PromotionProduct[]>([]);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [savingType, setSavingType] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setStatus('loading');
+    setError(null);
+
+    apiClient
+      .listPromotionAdminProducts()
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setProducts(response.data);
+        setStatus('ready');
+      })
+      .catch((requestError) => {
+        if (!active) {
+          return;
+        }
+
+        setError(getTeamError(requestError));
+        setStatus('error');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const updateProduct = (type: PromotionProduct['type'], patch: Partial<PromotionProduct>) => {
+    setProducts((current) => current.map((product) => (product.type === type ? { ...product, ...patch } : product)));
+  };
+
+  const saveProduct = async (product: PromotionProduct) => {
+    setSavingType(product.type);
+    setError(null);
+
+    try {
+      const response = await apiClient.updatePromotionAdminProduct(product.type, {
+        enabled: product.enabled,
+        price: product.price,
+        durationHours: product.durationHours,
+        applicableAdTypes: product.applicableAdTypes,
+        configuration: product.configuration,
+        channelBehavior: product.channelBehavior
+      });
+      updateProduct(product.type, response.data);
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setSavingType(null);
+    }
+  };
+
+  return (
+    <SectionCard title="Продвижение объявлений" description="Продукты выключены, пока не задана цена и срок. AUTO_BUMP по умолчанию работает только внутри Mini App.">
+      <div className="grid gap-3">
+        {error ? <p className="rounded-panel border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{error}</p> : null}
+        {status === 'loading' ? <LoadingState /> : null}
+        {status === 'error' ? (
+          <EmptyState title="Не удалось загрузить продукты продвижения" description={error ?? 'Попробуйте обновить страницу.'} />
+        ) : null}
+        {status === 'ready' ? (
+          products.map((product) => (
+            <div key={product.type} className="rounded-panel border border-white/10 bg-surface-950/50 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={18} className="text-accent-green" />
+                  <strong className="text-text-primary">{promotionProductAdminLabel(product.type)}</strong>
+                </div>
+                <button
+                  type="button"
+                  className={`h-8 w-14 rounded-full border transition ${product.enabled ? 'border-accent-green bg-accent-greenSoft' : 'border-white/10 bg-white/[0.04]'}`}
+                  onClick={() => updateProduct(product.type, { enabled: !product.enabled })}
+                  aria-label="Включить продукт"
+                >
+                  <span className={`block h-6 w-6 rounded-full transition ${product.enabled ? 'ml-7 bg-accent-green' : 'ml-1 bg-text-muted'}`} />
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input
+                  label="Цена, ₽"
+                  value={product.price ?? ''}
+                  placeholder="Например: 150.00"
+                  onChange={(event) => updateProduct(product.type, { price: event.target.value })}
+                />
+                <Input
+                  label="Срок, часов"
+                  value={product.durationHours?.toString() ?? ''}
+                  placeholder={product.type === 'BUMP_ONCE' ? 'не требуется' : 'Например: 168'}
+                  onChange={(event) => updateProduct(product.type, { durationHours: event.target.value ? Number(event.target.value) : null })}
+                />
+                <Select
+                  label="Каналы для auto-bump"
+                  value={product.channelBehavior.autoBumpChannels ?? 'NONE'}
+                  options={[
+                    { value: 'NONE', label: 'Только Mini App' },
+                    { value: 'MAX_ONLY', label: 'MAX' },
+                    { value: 'TELEGRAM_ONLY', label: 'Telegram' },
+                    { value: 'ALL', label: 'MAX и Telegram' }
+                  ]}
+                  onChange={(event) =>
+                    updateProduct(product.type, {
+                      channelBehavior: {
+                        ...product.channelBehavior,
+                        autoBumpChannels: event.target.value as PromotionProduct['channelBehavior']['autoBumpChannels']
+                      }
+                    })
+                  }
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(['vacancy', 'resume', 'equipment', 'material', 'tool'] as const).map((type) => {
+                  const checked = product.applicableAdTypes.includes(type);
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`rounded-panel border px-3 py-2 text-xs font-extrabold ${checked ? 'border-accent-green bg-accent-greenSoft text-accent-green' : 'border-white/10 bg-surface-900 text-text-secondary'}`}
+                      onClick={() =>
+                        updateProduct(product.type, {
+                          applicableAdTypes: checked
+                            ? product.applicableAdTypes.filter((item) => item !== type)
+                            : [...product.applicableAdTypes, type]
+                        })
+                      }
+                    >
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <ActionButton
+                className="mt-3"
+                icon={<Save size={17} />}
+                disabled={savingType === product.type}
+                onClick={() => void saveProduct(product)}
+              >
+                {savingType === product.type ? 'Сохраняем...' : 'Сохранить продукт'}
+              </ActionButton>
+            </div>
+          ))
+        ) : null}
+      </div>
+    </SectionCard>
   );
 }
 
@@ -402,6 +692,19 @@ function getRoleLabel(role: TeamRole): string {
   }
 
   return 'Пользователь';
+}
+
+function promotionProductAdminLabel(type: PromotionProduct['type']): string {
+  const labels: Record<PromotionProduct['type'], string> = {
+    BUMP_ONCE: 'Поднять один раз',
+    URGENT_BADGE: 'Срочно',
+    PIN_CATEGORY: 'Закрепить в категории',
+    HIGHLIGHT_CARD: 'Выделить карточку',
+    RECOMMENDED: 'Рекомендуемое',
+    AUTO_BUMP: 'Автоподнятие'
+  };
+
+  return labels[type];
 }
 
 function getStatusLabel(status: TeamUser['status']): string {

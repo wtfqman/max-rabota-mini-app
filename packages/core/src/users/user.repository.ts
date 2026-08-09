@@ -7,6 +7,7 @@ export interface UpsertMaxUserData {
   lastName?: string | null;
   displayName?: string | null;
   locale?: string | null;
+  referrerId?: string | null;
 }
 
 export class UserRepository {
@@ -16,6 +17,15 @@ export class UserRepository {
     const now = new Date();
 
     return this.db.$transaction(async (transaction) => {
+      const existingUser = await transaction.user.findUnique({
+        where: {
+          maxUserId: data.maxUserId
+        },
+        select: {
+          id: true
+        }
+      });
+
       const user = await transaction.user.upsert({
         where: {
           maxUserId: data.maxUserId
@@ -39,6 +49,27 @@ export class UserRepository {
           lastSeenAt: now
         }
       });
+
+      if (!existingUser && data.referrerId && data.referrerId !== user.id) {
+        const referrer = await transaction.user.findUnique({
+          where: {
+            id: data.referrerId
+          },
+          select: {
+            id: true,
+            deletedAt: true
+          }
+        });
+
+        if (referrer && !referrer.deletedAt) {
+          await transaction.referral.create({
+            data: {
+              referrerId: referrer.id,
+              referredId: user.id
+            }
+          });
+        }
+      }
 
       await transaction.userProfile.upsert({
         where: {

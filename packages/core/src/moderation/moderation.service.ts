@@ -25,6 +25,7 @@ export class ModerationService {
 
   async approveAd(adId: string, moderatorId: string): Promise<Ad> {
     const ad = await this.requireAd(adId);
+    this.assertPendingModeration(ad, 'approve');
     const updatedAd = await this.adRepository.updateStatus(adId, AdStatus.APPROVED);
 
     await this.moderationLogRepository.create({
@@ -40,6 +41,7 @@ export class ModerationService {
 
   async rejectAd(adId: string, moderatorId: string, reason: string): Promise<Ad> {
     const ad = await this.requireAd(adId);
+    this.assertPendingModeration(ad, 'reject');
     const updatedAd = await this.adRepository.updateStatus(adId, AdStatus.REJECTED);
 
     await this.moderationLogRepository.create({
@@ -141,5 +143,17 @@ export class ModerationService {
     }
 
     return ad;
+  }
+
+  private assertPendingModeration(ad: Ad, action: 'approve' | 'reject'): void {
+    if (ad.status === AdStatus.PENDING_MODERATION) {
+      return;
+    }
+
+    throw new AppError('Ad is not pending moderation', 409, {
+      adId: ad.id,
+      action,
+      status: ad.status.toLowerCase()
+    });
   }
 }

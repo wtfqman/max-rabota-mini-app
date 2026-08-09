@@ -26,6 +26,7 @@ export class ChannelPostFormatter {
   formatAd(ad: AdWithDetailsRecord): string {
     const type = this.getAdType(ad);
     const lines = [
+      ...this.getPromotionBadgeLines(ad),
       `**${this.getTypeLabel(type)}: ${this.escapeMarkdown(ad.title)}**`,
       ...this.getTemplateLines(ad, type),
       this.getContactsBlock(ad),
@@ -33,6 +34,21 @@ export class ChannelPostFormatter {
     ];
 
     return this.trimToMaxMessageLength(lines.filter(Boolean).join('\n'));
+  }
+
+  private getPromotionBadgeLines(ad: AdWithDetailsRecord): string[] {
+    const now = Date.now();
+    const badges: string[] = [];
+
+    if (ad.promotionUrgentUntil && ad.promotionUrgentUntil.getTime() > now) {
+      badges.push('**СРОЧНО**');
+    }
+
+    if (ad.promotionRecommendedUntil && ad.promotionRecommendedUntil.getTime() > now) {
+      badges.push('**РЕКОМЕНДУЕМОЕ**');
+    }
+
+    return badges;
   }
 
   getDetailsUrl(ad: AdWithDetailsRecord): string {
@@ -132,44 +148,35 @@ export class ChannelPostFormatter {
 
   private formatResume(ad: AdWithDetailsRecord): Array<string | null> {
     return [
-      this.formatLine('Профессия', ad.resumeDetails?.desiredPosition),
-      this.formatLine('О себе / опыт', ad.description, ['Опыт', 'О себе']),
-      this.formatLine('Желаемая зарплата', this.formatMoneyValue(ad.resumeDetails?.expectedSalary, ad.resumeDetails?.salaryCurrency ?? ad.currency)),
-      this.formatLine('Район', ad.districtText),
+      this.formatLine('Профессия', ad.resumeDetails?.profession ?? ad.resumeDetails?.desiredPosition),
+      this.formatLine('Описание', ad.description, ['Описание']),
+      this.formatLine('Желаемая сумма', this.formatMoneyValue(ad.resumeDetails?.expectedSalary, ad.resumeDetails?.salaryCurrency ?? ad.currency)),
       this.formatLine('Адрес', this.getAddress(ad))
     ];
   }
 
   private formatVacancy(ad: AdWithDetailsRecord): Array<string | null> {
     return [
-      this.formatLine('Компания', this.getVacancyCompanyName(ad)),
-      this.formatLine('Описание', ad.description, ['Описание']),
       this.getSalary(ad),
-      this.formatLine('Район', ad.districtText),
-      this.formatLine('Адрес', this.getAddress(ad))
+      this.formatLine('Адрес', this.getAddress(ad)),
+      this.formatLine('Описание', ad.description, ['Описание'])
     ];
   }
 
   private formatEquipment(ad: AdWithDetailsRecord): Array<string | null> {
-    const model = [ad.equipmentDetails?.brand, ad.equipmentDetails?.model].filter(Boolean).join(' ');
-
     return [
-      this.formatLine('Модель', model || null),
-      this.formatLine('Описание', ad.description, ['Описание']),
-      this.formatLine('Состояние', ad.equipmentDetails?.condition?.toLowerCase()),
-      this.formatLine('Аренда', this.formatMoneyValue(ad.equipmentDetails?.rentalPrice, ad.equipmentDetails?.currency ?? ad.currency)),
-      this.formatLine('Цена', this.formatMoneyValue(ad.equipmentDetails?.salePrice, ad.equipmentDetails?.currency ?? ad.currency)),
-      this.formatLine('Район', ad.districtText),
-      this.formatLine('Адрес', this.getAddress(ad))
+      this.formatLine('Стоимость', this.getEquipmentPrice(ad)),
+      this.formatLine('Адрес', this.getAddress(ad)),
+      this.formatLine('Описание', ad.description, ['Описание'])
     ];
   }
 
   private formatTradeAd(ad: AdWithDetailsRecord): Array<string | null> {
     return [
-      this.formatLine('Описание', ad.description, ['Описание']),
+      this.formatLine('Категория', ad.categoryText),
       this.formatLine('Цена', this.formatMoneyValue(ad.priceAmount, ad.currency)),
-      this.formatLine('Район', ad.districtText),
-      this.formatLine('Адрес', this.getAddress(ad))
+      this.formatLine('Адрес', this.getAddress(ad)),
+      this.formatLine('Описание', ad.description, ['Описание'])
     ];
   }
 
@@ -192,14 +199,26 @@ export class ChannelPostFormatter {
     }
 
     if (from) {
-      return `Зарплата: ${this.escapeMarkdown(`от ${from} ${suffix}`)}`;
+      return `Зарплата: ${this.escapeMarkdown(`${from} ${suffix}`)}`;
     }
 
     if (to) {
-      return `Зарплата: ${this.escapeMarkdown(`до ${to} ${suffix}`)}`;
+      return `Зарплата: ${this.escapeMarkdown(`${to} ${suffix}`)}`;
     }
 
-    return ad.vacancyDetails.isSalaryNegotiable ? 'Зарплата: по договорённости' : null;
+    return ad.vacancyDetails.isSalaryNegotiable ? 'Зарплата: по договоренности' : null;
+  }
+
+  private getEquipmentPrice(ad: AdWithDetailsRecord): string | null {
+    return this.formatMoneyValue(
+      ad.priceAmount ??
+        ad.equipmentDetails?.rentalPrice ??
+        ad.equipmentDetails?.salePrice ??
+        ad.equipmentDetails?.shiftPrice ??
+        ad.equipmentDetails?.dailyPrice ??
+        ad.equipmentDetails?.hourlyPrice,
+      ad.equipmentDetails?.currency ?? ad.currency
+    );
   }
 
   private getContactsBlock(ad: AdWithDetailsRecord): string | null {
@@ -208,22 +227,6 @@ export class ChannelPostFormatter {
       .filter((contact): contact is string => Boolean(contact));
 
     return contacts.length ? `\nКонтакты:\n${contacts.join('\n')}` : null;
-  }
-
-  private getVacancyCompanyName(ad: AdWithDetailsRecord): string | null {
-    const companyName = ad.vacancyDetails?.companyName?.trim();
-
-    if (companyName && companyName !== 'Работодатель' && companyName !== 'Работодатель Rabst24') {
-      return companyName;
-    }
-
-    return this.getOwnerName(ad);
-  }
-
-  private getOwnerName(ad: AdWithDetailsRecord): string | null {
-    const fullName = [ad.owner.firstName, ad.owner.lastName].filter(Boolean).join(' ').trim();
-
-    return ad.owner.displayName || fullName || ad.owner.maxUsername || null;
   }
 
   private formatContact(contact: AdWithDetailsRecord['contacts'][number]): string | null {
@@ -359,7 +362,7 @@ export class ChannelPostFormatter {
   }
 
   private formatCurrency(currency: string): string {
-    return currency.toUpperCase() === 'RUB' ? '₽' : currency;
+    return currency.toUpperCase() === 'RUB' ? 'руб.' : currency;
   }
 
   private escapeMarkdown(value: string): string {

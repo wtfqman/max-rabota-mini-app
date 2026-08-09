@@ -137,6 +137,7 @@ export function FavoritesPage() {
               location={item.ad.locationShort}
               price={item.ad.shortSalary ?? undefined}
               category={item.ad.category}
+              promotion={item.ad.promotion}
               isFavorite
               onFavoriteClick={() => void remove(item.ad.id)}
             />

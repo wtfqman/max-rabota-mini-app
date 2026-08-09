@@ -2,7 +2,7 @@
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
-  options: Array<{ value: string; label: string }>;
+  options: ReadonlyArray<{ value: string; label: string }>;
   error?: string;
 }
 

@@ -60,6 +60,22 @@ export function CreateChooserPage() {
             <HardHat size={21} />
           </div>
         </div>
+
+        <div className="mt-3 rounded-2xl border border-accent-green/20 bg-accent-greenSoft/45 px-3 py-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-accent-green">
+                Вакансии платные, остальные разделы бесплатные
+              </p>
+              <p className="mt-1 text-[12px] font-semibold leading-4 text-text-secondary">
+                Резюме, техника, материалы и инструменты сразу отправляются на модерацию. Тарифы нужны только для вакансий.
+              </p>
+            </div>
+            <div className="shrink-0 rounded-full border border-accent-green/25 bg-surface-950/55 px-3 py-1 text-[13px] font-black text-accent-green">
+              1 / 3 / 7
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-2 app-fade-up" aria-label="Типы объявлений">

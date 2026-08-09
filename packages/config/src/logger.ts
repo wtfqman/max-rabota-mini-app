@@ -4,7 +4,16 @@ import { config } from './env.js';
 export const logger = pino({
   level: config.logLevel,
   redact: {
-    paths: ['req.headers.authorization', 'authorization', '*.token', '*.secret'],
+    paths: [
+      'req.headers.authorization',
+      'authorization',
+      '*.token',
+      '*.secret',
+      '*.botToken',
+      '*.fileUrl',
+      'telegramToken',
+      'telegramFileUrl'
+    ],
     censor: '[redacted]'
   },
   transport:

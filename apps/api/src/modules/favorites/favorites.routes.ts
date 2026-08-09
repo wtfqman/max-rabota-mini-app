@@ -10,7 +10,7 @@ import { FavoritesService } from './favorites.service.js';
 export function createFavoritesRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new FavoritesRepository(container.db);
-  const service = new FavoritesService(repository, container.favoriteRepository);
+  const service = new FavoritesService(repository, container.favoriteRepository, container.adAnalyticsService);
   const controller = new FavoritesController(service);
 
   router.get('/status', controller.status);

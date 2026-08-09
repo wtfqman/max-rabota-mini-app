@@ -7,7 +7,12 @@ import type {
 import type { StartHandler } from './handlers/start.handler.js';
 
 export class BotUpdateRouter {
-  constructor(private readonly startHandler: StartHandler) {}
+  constructor(
+    private readonly startHandler: StartHandler,
+    private readonly contactHandler?: {
+      handleBotContactMessage(update: MaxMessageCreatedUpdate): Promise<boolean>;
+    }
+  ) {}
 
   async route(update: MaxUpdate): Promise<void> {
     try {
@@ -18,6 +23,10 @@ export class BotUpdateRouter {
 
       if (isMessageCreatedUpdate(update)) {
         this.captureChannelContext(update);
+        if (await this.contactHandler?.handleBotContactMessage(update)) {
+          return;
+        }
+
         const text = update.message.body?.text?.trim();
 
         if (text === '/start' || text?.startsWith('/start ')) {

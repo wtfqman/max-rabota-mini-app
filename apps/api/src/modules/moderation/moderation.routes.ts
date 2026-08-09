@@ -21,7 +21,12 @@ export function createModerationRouter(container: ApiContainer): Router {
     container.adService,
     container.moderationService,
     container.moderationLogRepository,
-    container.channelPublishingService
+    container.channelPublishingService,
+    container.adPaymentService,
+    container.adRevisionRepository,
+    container.notificationService,
+    container.savedSearchesService,
+    container.telegramSyncService
   );
   const controller = new ModerationController(service);
   const adminOnly = [requireAuth, requireRole(['admin', 'moderator'])];

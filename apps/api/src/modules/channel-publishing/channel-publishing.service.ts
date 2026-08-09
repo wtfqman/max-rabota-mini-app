@@ -6,6 +6,7 @@ import type {
 } from '@rabst24/core';
 import { AppError } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
+import type { AdPaymentService } from '../payments/ad-payment.service.js';
 import type { ChannelPublishingRepository } from './channel-publishing.repository.js';
 import type { PublishAdDto, PublishLogsQuery } from './channel-publishing.schemas.js';
 
@@ -13,7 +14,8 @@ export class ChannelPublishingModuleService extends FoundationService {
   constructor(
     repository: ChannelPublishingRepository,
     private readonly adService: CoreAdService,
-    private readonly channelPublishingService: CoreChannelPublishingService
+    private readonly channelPublishingService: CoreChannelPublishingService,
+    private readonly adPaymentService: AdPaymentService
   ) {
     super(repository);
   }
@@ -31,6 +33,8 @@ export class ChannelPublishingModuleService extends FoundationService {
         status: ad.status.toLowerCase()
       });
     }
+
+    await this.adPaymentService.assertAdHasFreshSucceededPaymentForPublication(adId);
 
     const result = await this.channelPublishingService.publishApprovedAd({
       chatId: channelId,

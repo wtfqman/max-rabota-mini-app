@@ -1,4 +1,4 @@
-﻿import { BriefcaseBusiness, FileUser, Home, PlusCircle, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, FileUser, Home, PlusCircle, UserRound } from 'lucide-react';
 import clsx from 'clsx';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -20,8 +20,12 @@ const tabs = [
       pathname.startsWith('/profile') ||
       pathname.startsWith('/favorites') ||
       pathname.startsWith('/my-ads') ||
+      pathname.startsWith('/applications') ||
+      pathname.startsWith('/notifications') ||
+      pathname.startsWith('/saved-searches') ||
       pathname.startsWith('/reviews') ||
-      pathname.startsWith('/moderation')
+      pathname.startsWith('/moderation') ||
+      pathname.startsWith('/team')
   }
 ];
 

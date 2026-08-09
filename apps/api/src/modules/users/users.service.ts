@@ -1,8 +1,9 @@
-import { logger } from '@rabst24/config';
+import { config, logger } from '@rabst24/config';
 import type { ChannelPublishingService } from '@rabst24/core';
 import { UserStatus } from '@rabst24/db';
 import { AppError } from '@rabst24/shared';
 import { FoundationService } from '../../shared/modules/module-status.js';
+import type { AdPaymentService } from '../payments/ad-payment.service.js';
 import { mapRole, mapStatus, type TeamUserQuery, type UsersRepository } from './users.repository.js';
 
 type ChannelRemovalSummary = Awaited<ReturnType<ChannelPublishingService['removeAdPublications']>>;
@@ -10,7 +11,8 @@ type ChannelRemovalSummary = Awaited<ReturnType<ChannelPublishingService['remove
 export class UsersService extends FoundationService {
   constructor(
     private readonly usersRepository: UsersRepository,
-    private readonly channelPublishingService?: Pick<ChannelPublishingService, 'removeAdPublications'>
+    private readonly channelPublishingService?: Pick<ChannelPublishingService, 'removeAdPublications'>,
+    private readonly adPaymentService?: Pick<AdPaymentService, 'getVacancyPublicationBalance'>
   ) {
     super(usersRepository);
   }
@@ -22,16 +24,38 @@ export class UsersService extends FoundationService {
       throw new AppError('User not found', 404);
     }
 
-    const stats = await this.usersRepository.getAdStats(userId);
+    const [stats, vacancyPublicationBalance, referral] = await Promise.all([
+      this.usersRepository.getAdStats(userId),
+      this.adPaymentService?.getVacancyPublicationBalance(userId) ??
+        Promise.resolve({ purchased: 0, bonus: 0, used: 0, remaining: 0 }),
+      this.usersRepository.getReferralStats(userId)
+    ]);
 
     return {
       user,
-      stats
+      stats: {
+        ...stats,
+        vacancyPublicationBalance
+      },
+      referral: {
+        ...referral,
+        inviteUrl: buildReferralInviteUrl(referral.code)
+      }
     };
   }
 
   async updateMe(userId: string, dto: { displayName?: string }) {
     return this.usersRepository.updateMe(userId, dto);
+  }
+
+  async getPublicProfile(userId: string) {
+    const profile = await this.usersRepository.findPublicProfile(userId);
+
+    if (!profile) {
+      throw new AppError('User profile not found', 404);
+    }
+
+    return profile;
   }
 
   async listTeamUsers(query: TeamUserQuery) {
@@ -106,5 +130,24 @@ export class UsersService extends FoundationService {
     }
 
     return summary;
+  }
+}
+
+function buildReferralInviteUrl(code: string): string {
+  const baseUrl = config.max.miniAppWebApp?.trim() || config.miniAppUrl;
+
+  try {
+    const url = new URL(baseUrl);
+
+    if (url.hostname.endsWith('max.ru') && (url.searchParams.has('startapp') || url.href.includes('startapp'))) {
+      url.searchParams.set('startapp', code);
+    } else {
+      url.searchParams.set('start_param', code);
+    }
+
+    return url.toString();
+  } catch {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}start_param=${encodeURIComponent(code)}`;
   }
 }

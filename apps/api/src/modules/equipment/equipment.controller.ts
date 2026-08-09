@@ -34,14 +34,16 @@ export class EquipmentController extends FoundationController {
       return;
     }
 
-    const ad = await this.equipmentService.createForModeration(ownerId, request.body as CreateEquipmentDto);
+    const result = await this.equipmentService.createForModeration(ownerId, request.body as CreateEquipmentDto);
+    const ad = result.ad;
 
     sendCreated(response, {
       id: ad.id,
       type: ad.type.toLowerCase(),
       status: ad.status.toLowerCase(),
       title: ad.title,
-      createdAt: ad.createdAt.toISOString()
+      createdAt: ad.createdAt.toISOString(),
+      payment: result.payment
     });
   });
 }

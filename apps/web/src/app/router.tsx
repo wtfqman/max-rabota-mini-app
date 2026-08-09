@@ -8,13 +8,19 @@ import { CreateProductPage } from '../pages/CreateProductPage.js';
 import { CreateResumePage } from '../pages/CreateResumePage.js';
 import { CreateVacancyPage } from '../pages/CreateVacancyPage.js';
 import { FavoritesPage } from '../pages/FavoritesPage.js';
+import { FinancePage } from '../pages/FinancePage.js';
 import { HomePage } from '../pages/HomePage.js';
 import { MyAdsPage } from '../pages/MyAdsPage.js';
+import { MyApplicationsPage } from '../pages/MyApplicationsPage.js';
 import { ModerationPage } from '../pages/ModerationPage.js';
+import { NotificationsPage } from '../pages/NotificationsPage.js';
 import { NotFoundPage } from '../pages/NotFoundPage.js';
 import { ProfilePage } from '../pages/ProfilePage.js';
+import { PublicProfilePage } from '../pages/PublicProfilePage.js';
 import { ResumesPage } from '../pages/ResumesPage.js';
 import { ReviewsPage } from '../pages/ReviewsPage.js';
+import { SavedSearchesPage } from '../pages/SavedSearchesPage.js';
+import { SavedSearchResultsPage } from '../pages/SavedSearchResultsPage.js';
 import { TeamPage } from '../pages/TeamPage.js';
 import { VacanciesPage } from '../pages/VacanciesPage.js';
 import { VacancyDetailsPage } from '../pages/VacancyDetailsPage.js';
@@ -106,8 +112,28 @@ export const router = createBrowserRouter([
         element: <ProfilePage />
       },
       {
+        path: 'users/:userId',
+        element: <PublicProfilePage />
+      },
+      {
+        path: 'notifications',
+        element: <NotificationsPage />
+      },
+      {
+        path: 'saved-searches',
+        element: <SavedSearchesPage />
+      },
+      {
+        path: 'saved-searches/:savedSearchId/results',
+        element: <SavedSearchResultsPage />
+      },
+      {
         path: 'my-ads',
         element: <MyAdsPage />
+      },
+      {
+        path: 'applications',
+        element: <MyApplicationsPage />
       },
       {
         path: 'reviews',
@@ -116,6 +142,10 @@ export const router = createBrowserRouter([
       {
         path: 'team',
         element: <TeamPage />
+      },
+      {
+        path: 'finance',
+        element: <FinancePage />
       },
       {
         path: 'moderation',

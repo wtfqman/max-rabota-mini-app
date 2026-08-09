@@ -1,5 +1,8 @@
+import { setDefaultResultOrder } from 'node:dns';
 import { bootstrap } from './app/bootstrap.js';
 import { config, logger } from '@rabst24/config';
+
+setDefaultResultOrder('ipv4first');
 
 bootstrap().catch((error) => {
   if (

@@ -1,5 +1,6 @@
 export interface PublicAdPhoto {
   id: string;
+  storageKey?: string;
   url: string;
   previewUrl: string | null;
   mimeType: string | null;
@@ -36,6 +37,13 @@ export interface PublicAdCard {
   address: string | null;
   category: string | null;
   chips: PublicAdChip[];
+  promotion?: {
+    urgent: boolean;
+    pinned: boolean;
+    highlighted: boolean;
+    recommended: boolean;
+    boostedAt: string | null;
+  };
   publishedAt: string | null;
   createdAt: string;
 }
@@ -50,10 +58,17 @@ export interface VacancyListMeta {
 
 export interface VacancyListQuery {
   q?: string;
+  city?: string;
   category?: string;
   district?: string;
   schedule?: string;
   experience?: string;
+  employmentType?: string;
+  workFormat?: string;
+  availability?: string;
+  dealType?: string;
+  brand?: string;
+  condition?: string;
   priceFrom?: string;
   priceTo?: string;
   page?: number;
@@ -82,6 +97,13 @@ export interface PublicVacancyDetail extends PublicAdCard {
     maxUsername: string | null;
     firstName: string | null;
     lastName: string | null;
+    profile: {
+      avatarUrl: string | null;
+      profileType: string;
+      companyName: string | null;
+      allowResumePublicProfile: boolean;
+    } | null;
+    trustBadges: string[];
   };
   updatedAt: string;
   vacancy: {
@@ -97,6 +119,10 @@ export interface PublicVacancyDetail extends PublicAdCard {
     salaryCurrency: string;
     salaryPeriod: string | null;
     isSalaryNegotiable: boolean;
+    paymentFormat: string | null;
+    providesAccommodation: boolean;
+    providesMeals: boolean;
+    projectDuration: string | null;
     metroStations: PublicMetroStation[];
   };
   requirements: string[];

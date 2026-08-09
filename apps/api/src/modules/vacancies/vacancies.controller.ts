@@ -34,14 +34,16 @@ export class VacanciesController extends FoundationController {
       return;
     }
 
-    const ad = await this.vacanciesService.createForModeration(ownerId, request.body as CreateVacancyDto);
+    const result = await this.vacanciesService.createForModeration(ownerId, request.body as CreateVacancyDto);
+    const ad = result.ad;
 
     sendCreated(response, {
       id: ad.id,
       type: ad.type.toLowerCase(),
       status: ad.status.toLowerCase(),
       title: ad.title,
-      createdAt: ad.createdAt.toISOString()
+      createdAt: ad.createdAt.toISOString(),
+      payment: result.payment
     });
   });
 }

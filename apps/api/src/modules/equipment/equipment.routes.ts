@@ -11,7 +11,12 @@ import { EquipmentService } from './equipment.service.js';
 export function createEquipmentRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new EquipmentRepository(container.db);
-  const service = new EquipmentService(repository, container.adService, container.moderationNotificationService);
+  const service = new EquipmentService(
+    repository,
+    container.adService,
+    container.moderationNotificationService,
+    container.notificationService
+  );
   const controller = new EquipmentController(service);
 
   router.get('/status', controller.status);

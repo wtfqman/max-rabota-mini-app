@@ -119,7 +119,7 @@ export function PhotoUploader({
   };
 
   return (
-    <div className="grid gap-2.5">
+    <div className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-extrabold uppercase tracking-[0.08em] text-text-secondary">Медиа</span>
         <span className="text-xs font-semibold text-text-muted">
@@ -140,11 +140,11 @@ export function PhotoUploader({
       ) : null}
 
       {value.length === 0 ? (
-        <label className="group flex min-h-[132px] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-panel border border-dashed border-accent-green/45 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.14),transparent_44%),rgba(255,255,255,0.03)] px-3 text-center transition hover:border-accent-green hover:bg-accent-greenSoft/70 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent-green active:scale-[0.985]">
-          <span className="flex h-12 w-12 items-center justify-center rounded-panel border border-accent-green/25 bg-accent-greenSoft text-accent-green transition group-hover:scale-105">
-            {isUploading ? <Loader2 className="animate-spin" size={23} /> : <ImagePlus size={23} />}
+        <label className="group flex min-h-[96px] cursor-pointer items-center justify-center gap-3 rounded-panel border border-dashed border-accent-green/45 bg-[radial-gradient(circle_at_top,rgba(52,211,153,0.12),transparent_44%),rgba(255,255,255,0.03)] px-3 text-left transition hover:border-accent-green hover:bg-accent-greenSoft/70 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent-green active:scale-[0.985]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-panel border border-accent-green/25 bg-accent-greenSoft text-accent-green transition group-hover:scale-105">
+            {isUploading ? <Loader2 className="animate-spin" size={21} /> : <ImagePlus size={21} />}
           </span>
-          <span className="grid gap-1">
+          <span className="grid min-w-0 gap-1">
             <span className="text-sm font-black text-text-primary">
               {isUploading ? 'Медиа загружается...' : 'Добавить фото или видео'}
             </span>

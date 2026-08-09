@@ -1,4 +1,4 @@
-import { getAdPublicationSettings, mergeAdPublicationSettings } from '@rabst24/core';
+import { adWithDetailsInclude, getAdPublicationSettings, mergeAdPublicationSettings } from '@rabst24/core';
 import { AdStatus, ModerationAction, UserRole, UserStatus, type Prisma, type PrismaClient, type User } from '@rabst24/db';
 import { AppError } from '@rabst24/shared';
 import { FoundationRepository } from '../../shared/modules/module-status.js';
@@ -20,6 +20,7 @@ export class UsersRepository extends FoundationRepository {
       },
       include: {
         profile: true,
+        trustBadgeAssignments: true,
         _count: {
           select: {
             ads: true,
@@ -38,6 +39,108 @@ export class UsersRepository extends FoundationRepository {
       },
       data
     });
+  }
+
+  async findPublicProfile(userId: string) {
+    const user = await this.db.user.findFirst({
+      where: {
+        id: userId,
+        status: UserStatus.ACTIVE,
+        deletedAt: null
+      },
+      include: {
+        profile: true,
+        trustBadgeAssignments: {
+          orderBy: {
+            createdAt: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    const publicAdWhere: Prisma.AdWhereInput = {
+      ownerId: userId,
+      status: {
+        in: [AdStatus.APPROVED, AdStatus.PUBLISHED]
+      },
+      deletedAt: null,
+      hiddenAt: null,
+      archivedAt: null,
+      isTest: false
+    };
+
+    const [activeAds, adsTotal, reviews, reviewSummary] = await this.db.$transaction([
+      this.db.ad.findMany({
+        where: publicAdWhere,
+        include: adWithDetailsInclude,
+        orderBy: [
+          {
+            publishedAt: 'desc'
+          },
+          {
+            createdAt: 'desc'
+          }
+        ],
+        take: 12
+      }),
+      this.db.ad.count({
+        where: publicAdWhere
+      }),
+      this.db.review.findMany({
+        where: {
+          subjectId: userId,
+          status: 'PUBLISHED',
+          deletedAt: null
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              displayName: true,
+              firstName: true,
+              lastName: true,
+              maxUsername: true
+            }
+          },
+          ad: {
+            select: {
+              id: true,
+              title: true,
+              type: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 5
+      }),
+      this.db.review.aggregate({
+        where: {
+          subjectId: userId,
+          status: 'PUBLISHED',
+          deletedAt: null
+        },
+        _avg: {
+          rating: true
+        },
+        _count: {
+          _all: true
+        }
+      })
+    ]);
+
+    return {
+      user,
+      activeAds,
+      adsTotal,
+      reviews,
+      reviewSummary
+    };
   }
 
   async listTeamUsers(query: TeamUserQuery) {
@@ -195,6 +298,40 @@ export class UsersRepository extends FoundationRepository {
     } satisfies {
       byStatus: Record<string, number>;
       byType: Record<string, number>;
+    };
+  }
+
+  async getReferralStats(userId: string) {
+    const [referredTotal, rewardedTotal, bonusPublications] = await this.db.$transaction([
+      this.db.referral.count({
+        where: {
+          referrerId: userId
+        }
+      }),
+      this.db.referral.count({
+        where: {
+          referrerId: userId,
+          rewardedAt: {
+            not: null
+          }
+        }
+      }),
+      this.db.vacancyPublicationGrant.aggregate({
+        where: {
+          userId,
+          source: 'REFERRAL'
+        },
+        _sum: {
+          publications: true
+        }
+      })
+    ]);
+
+    return {
+      code: `ref_${userId}`,
+      referredTotal,
+      rewardedTotal,
+      bonusPublications: bonusPublications._sum.publications ?? 0
     };
   }
 

@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { serializeAdDetail, serializeAdListMeta } from '@rabst24/core';
-import { AppError, type RejectAdDto } from '@rabst24/shared';
+import { AppError, requiresAdPayment, type RejectAdDto } from '@rabst24/shared';
 import { asyncHandler } from '../../shared/http/async-handler.js';
 import { sendOk } from '../../shared/http/responses.js';
 import { FoundationController } from '../../shared/modules/foundation.controller.js';
+import { serializeRevisionSummary } from '../ads/ad-revision.serializer.js';
 import type { ModerationQueueQuery } from './moderation.schemas.js';
 import type { ModerationModuleService } from './moderation.service.js';
 
@@ -14,12 +15,13 @@ export class ModerationController extends FoundationController {
 
   queue = asyncHandler(async (request: Request, response: Response): Promise<void> => {
     const result = await this.moderationService.listQueue(request.query as unknown as ModerationQueueQuery);
-    sendOk(response, result.items.map(serializeAdDetail), serializeAdListMeta(result));
+    const items = await Promise.all(result.items.map((ad) => this.serializeModerationAdDetail(ad)));
+    sendOk(response, items, serializeAdListMeta(result));
   });
 
   preview = asyncHandler(async (request: Request, response: Response): Promise<void> => {
     const ad = await this.moderationService.getPreview(request.params.adId);
-    sendOk(response, serializeAdDetail(ad));
+    sendOk(response, await this.serializeModerationAdDetail(ad));
   });
 
   approve = asyncHandler(async (request: Request, response: Response): Promise<void> => {
@@ -27,7 +29,7 @@ export class ModerationController extends FoundationController {
     const result = await this.moderationService.approve(request.params.adId, moderatorId);
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       publication: result.publication
     });
   });
@@ -41,8 +43,10 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
-      channelRemoval: result.channelRemoval
+      ad: await this.serializeModerationAdDetail(result.ad),
+      channelRemoval: result.channelRemoval,
+      creditReturn: result.creditReturn,
+      refund: result.refund
     });
   });
 
@@ -55,7 +59,7 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       channelRemoval: result.channelRemoval
     });
   });
@@ -69,7 +73,7 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       channelRemoval: result.channelRemoval
     });
   });
@@ -83,7 +87,7 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       channelRemoval: result.channelRemoval
     });
   });
@@ -97,7 +101,7 @@ export class ModerationController extends FoundationController {
     );
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       channelRemoval: result.channelRemoval
     });
   });
@@ -107,7 +111,7 @@ export class ModerationController extends FoundationController {
     const result = await this.moderationService.removeFromChannel(request.params.adId, moderatorId);
 
     sendOk(response, {
-      ad: serializeAdDetail(result.ad),
+      ad: await this.serializeModerationAdDetail(result.ad),
       channelRemoval: result.channelRemoval
     });
   });
@@ -131,4 +135,44 @@ export class ModerationController extends FoundationController {
 
     return request.auth.userId;
   }
+
+  private async serializeModerationAdDetail(ad: Parameters<typeof serializeAdDetail>[0]) {
+    const revision = await this.moderationService.getPendingRevision(ad.id);
+
+    return {
+      ...serializeModerationAdDetail(ad),
+      revision: serializeRevisionSummary(revision)
+    };
+  }
+}
+
+function serializeModerationAdDetail(ad: Parameters<typeof serializeAdDetail>[0]) {
+  return {
+    ...serializeAdDetail(ad),
+    payment: getLatestPaymentPayload(ad)
+  };
+}
+
+function getLatestPaymentPayload(ad: Parameters<typeof serializeAdDetail>[0]) {
+  if (!requiresAdPayment(ad.type)) {
+    return null;
+  }
+
+  const payment = ad.payments[0];
+
+  if (!payment) {
+    return null;
+  }
+
+  return {
+    id: payment.id,
+    paymentId: payment.yooKassaPaymentId,
+    status: payment.status.toLowerCase(),
+    amount: payment.amountValue,
+    currency: payment.currency,
+    confirmationUrl: payment.confirmationUrl,
+    paidAt: payment.paidAt?.toISOString() ?? null,
+    refundedAt: payment.refundedAt?.toISOString() ?? null,
+    createdAt: payment.createdAt.toISOString()
+  };
 }

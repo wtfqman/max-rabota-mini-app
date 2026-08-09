@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { RefreshCw, SearchX } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { AdFiltersDrawer, type AdFiltersState } from '../features/ads/AdFiltersDrawer.js';
+import { SaveSearchButton } from '../features/saved-searches/SaveSearchButton.js';
 import type { PublicAdCard, VacancyListMeta } from '../features/vacancies/vacancy.types.js';
 import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
@@ -196,6 +197,18 @@ export function ResumesPage() {
 
         <ActiveFilterChips filters={filters} onClear={(key) => applyQuery({ [key]: '' })} />
 
+        <SaveSearchButton
+          adType="resume"
+          defaultName={filters.q || filters.category || 'Резюме'}
+          query={{
+            q: filters.q,
+            category: filters.category,
+            district: filters.district,
+            priceFrom: filters.priceFrom,
+            priceTo: filters.priceTo
+          }}
+        />
+
         {filterNotice ? (
           <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">
             {filterNotice}
@@ -252,6 +265,7 @@ export function ResumesPage() {
               category={ad.category}
               description={ad.description}
               chips={ad.chips.map((chip) => ({ key: chip.key, value: chip.value }))}
+              promotion={ad.promotion}
               isFavorite={favoriteIds.has(ad.id)}
               onFavoriteClick={() => toggleFavorite(ad.id)}
             />
@@ -326,8 +340,6 @@ function readFilters(searchParams: URLSearchParams) {
     q: searchParams.get('q') ?? '',
     category: searchParams.get('category') ?? '',
     district: searchParams.get('district') ?? '',
-    schedule: '',
-    experience: '',
     priceFrom: searchParams.get('priceFrom') ?? '',
     priceTo: searchParams.get('priceTo') ?? ''
   };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { RefreshCw, SearchX } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { AdFiltersDrawer, type AdFiltersState } from '../features/ads/AdFiltersDrawer.js';
+import { SaveSearchButton } from '../features/saved-searches/SaveSearchButton.js';
 import type { PublicAdCard, VacancyListMeta } from '../features/vacancies/vacancy.types.js';
 import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
@@ -73,7 +74,6 @@ export function VacanciesPage() {
         q: filters.q,
         category: filters.category,
         district: filters.district,
-        experience: filters.experience,
         priceFrom: filters.priceFrom,
         priceTo: filters.priceTo,
         page,
@@ -105,7 +105,6 @@ export function VacanciesPage() {
   const activeFilterCount = [
     filters.category,
     filters.district,
-    filters.experience,
     filters.priceFrom,
     filters.priceTo
   ].filter(Boolean).length;
@@ -128,8 +127,6 @@ export function VacanciesPage() {
     writeParam(next, 'q', merged.q);
     writeParam(next, 'category', merged.category);
     writeParam(next, 'district', merged.district);
-    next.delete('schedule');
-    writeParam(next, 'experience', merged.experience);
     writeParam(next, 'priceFrom', merged.priceFrom);
     writeParam(next, 'priceTo', merged.priceTo);
     next.set('page', '1');
@@ -202,6 +199,18 @@ export function VacanciesPage() {
 
         <ActiveFilterChips filters={filters} onClear={(key) => applyQuery({ [key]: '' })} />
 
+        <SaveSearchButton
+          adType="vacancy"
+          defaultName={filters.q || filters.category || 'Вакансии'}
+          query={{
+            q: filters.q,
+            category: filters.category,
+            district: filters.district,
+            priceFrom: filters.priceFrom,
+            priceTo: filters.priceTo
+          }}
+        />
+
         {filterNotice ? (
           <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">
             {filterNotice}
@@ -258,6 +267,7 @@ export function VacanciesPage() {
               category={ad.category}
               description={ad.description}
               chips={ad.chips.map((chip) => ({ key: chip.key, value: chip.value }))}
+              promotion={ad.promotion}
               isFavorite={favoriteIds.has(ad.id)}
               onFavoriteClick={() => toggleFavorite(ad.id)}
             />
@@ -308,7 +318,6 @@ function ActiveFilterChips({
   const chips = [
     { key: 'category', label: filters.category },
     { key: 'district', label: filters.district },
-    { key: 'experience', label: filters.experience },
     { key: 'priceFrom', label: filters.priceFrom ? `от ${formatMoney(filters.priceFrom)} ₽` : '' },
     { key: 'priceTo', label: filters.priceTo ? `до ${formatMoney(filters.priceTo)} ₽` : '' }
   ].filter((chip) => chip.label);
@@ -333,8 +342,6 @@ function readFilters(searchParams: URLSearchParams) {
     q: searchParams.get('q') ?? '',
     category: searchParams.get('category') ?? '',
     district: searchParams.get('district') ?? '',
-    schedule: '',
-    experience: searchParams.get('experience') ?? '',
     priceFrom: searchParams.get('priceFrom') ?? '',
     priceTo: searchParams.get('priceTo') ?? ''
   };
@@ -358,7 +365,6 @@ function buildFilterKey(filters: ReturnType<typeof readFilters>): string {
     filters.q,
     filters.category,
     filters.district,
-    filters.experience,
     filters.priceFrom,
     filters.priceTo
   ].join('|');

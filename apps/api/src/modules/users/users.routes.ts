@@ -11,7 +11,7 @@ import { UsersService } from './users.service.js';
 export function createUsersRouter(container: ApiContainer): Router {
   const router = Router();
   const repository = new UsersRepository(container.db);
-  const service = new UsersService(repository, container.channelPublishingService);
+  const service = new UsersService(repository, container.channelPublishingService, container.adPaymentService);
   const controller = new UsersController(service);
 
   router.get('/status', controller.status);
@@ -32,7 +32,7 @@ export function createUsersRouter(container: ApiContainer): Router {
     validateRequest({ params: userIdParamSchema, body: updateUserStatusSchema }),
     controller.updateStatus
   );
-  router.get('/:userId', validateRequest({ params: userIdParamSchema }), controller.reserved);
+  router.get('/:userId', validateRequest({ params: userIdParamSchema }), controller.publicProfile);
 
   return router;
 }

@@ -1,0 +1,15 @@
+{
+  "name": "@rabst24/telegram",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rabst24/config": "file:../config",
+    "@rabst24/core": "file:../core",
+    "@rabst24/db": "file:../db",
+    "@rabst24/shared": "file:../shared"
+  }
+}

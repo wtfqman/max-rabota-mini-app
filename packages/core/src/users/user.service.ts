@@ -6,7 +6,11 @@ import type { UserRepository } from './user.repository.js';
 export class UserService {
   constructor(private readonly userRepository: UserRepository) {}
 
-  async registerFromMaxUser(maxUser: MaxUser, locale?: string | null): Promise<User> {
+  async registerFromMaxUser(
+    maxUser: MaxUser,
+    locale?: string | null,
+    options: { startParam?: string | null } = {}
+  ): Promise<User> {
     const firstName = maxUser.first_name ?? null;
     const lastName = maxUser.last_name ?? null;
     const displayName = [firstName, lastName].filter(Boolean).join(' ') || maxUser.name || null;
@@ -17,7 +21,8 @@ export class UserService {
       firstName,
       lastName,
       displayName,
-      locale: locale ?? null
+      locale: locale ?? null,
+      referrerId: parseReferralStartParam(options.startParam)
     });
   }
 
@@ -30,4 +35,15 @@ export class UserService {
 
     return user;
   }
+}
+
+function parseReferralStartParam(startParam: string | null | undefined): string | null {
+  const normalized = startParam?.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const match = /^ref_([a-z0-9_-]{8,64})$/i.exec(normalized);
+  return match?.[1] ?? null;
 }

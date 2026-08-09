@@ -16,6 +16,13 @@ export interface AdCardProps {
   coverMimeType?: string | null;
   category?: string | null;
   chips?: Array<{ key: string; value: string }>;
+  promotion?: {
+    urgent: boolean;
+    pinned: boolean;
+    highlighted: boolean;
+    recommended: boolean;
+    boostedAt: string | null;
+  };
   isFavorite?: boolean;
   onFavoriteClick?: () => void;
 }
@@ -33,18 +40,21 @@ export function AdCard({
   coverMimeType,
   category,
   chips = [],
+  promotion,
   isFavorite,
   onFavoriteClick
 }: AdCardProps) {
   const Icon = getTypeIcon(typeLabel);
   const gridMeta = getGridMeta({ typeLabel, subtitle, location, category, chips });
   const gridPrice = price ?? 'По договоренности';
+  const promotionBadges = getPromotionBadges(promotion);
+  const highlightClass = promotion?.highlighted ? 'border-accent-green/55 shadow-[0_16px_36px_rgba(34,197,94,0.16)]' : '';
 
   if (variant === 'grid') {
     return (
       <Link
         to={to}
-        className="group block h-full overflow-hidden rounded-panel border border-white/8 bg-surface-900/95 shadow-[0_10px_28px_rgba(0,0,0,0.24)] transition duration-200 hover:border-accent-green/35 hover:bg-surface-850 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985]"
+        className={`group block h-full overflow-hidden rounded-panel border border-white/8 bg-surface-900/95 shadow-[0_10px_28px_rgba(0,0,0,0.24)] transition duration-200 hover:border-accent-green/35 hover:bg-surface-850 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985] ${highlightClass}`}
       >
         <article className="flex h-full flex-col">
           <div className="relative aspect-[4/3] overflow-hidden bg-surface-800">
@@ -74,6 +84,15 @@ export function AdCard({
           </div>
 
           <div className="flex min-h-[112px] flex-1 flex-col gap-1.5 px-2.5 py-2.5">
+            {promotionBadges.length ? (
+              <div className="flex flex-wrap gap-1">
+                {promotionBadges.map((badge) => (
+                  <span key={badge} className="rounded-full border border-accent-green/25 bg-accent-greenSoft px-2 py-0.5 text-[10px] font-black uppercase text-accent-green">
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <h2 className="line-clamp-2 min-h-[2.35rem] break-words text-[13px] font-extrabold leading-[1.18] text-text-primary">
               {title}
             </h2>
@@ -91,7 +110,7 @@ export function AdCard({
     return (
       <Link
         to={to}
-        className="app-surface app-topline block overflow-hidden rounded-panel p-4 transition duration-200 hover:translate-y-[-1px] hover:border-accent-green/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985]"
+        className={`app-surface app-topline block overflow-hidden rounded-panel p-4 transition duration-200 hover:translate-y-[-1px] hover:border-accent-green/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985] ${highlightClass}`}
       >
         <article className="space-y-4">
           <div className="flex items-start gap-3">
@@ -129,6 +148,9 @@ export function AdCard({
           {description ? <p className="line-clamp-2 text-sm leading-5 text-text-secondary">{description}</p> : null}
 
           <div className="flex flex-wrap gap-2">
+            {promotionBadges.map((badge) => (
+              <StatChip key={badge} label={badge} tone="green" />
+            ))}
             {location ? <StatChip label={location} icon={<MapPin size={15} />} /> : null}
             {price ? <StatChip label={price} tone="green" /> : null}
             {category ? <StatChip label={category} tone="green" icon={<Tag size={15} />} /> : null}
@@ -144,7 +166,7 @@ export function AdCard({
   return (
     <Link
       to={to}
-      className="app-surface block overflow-hidden rounded-panel transition duration-200 hover:translate-y-[-1px] hover:border-accent-green/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985]"
+      className={`app-surface block overflow-hidden rounded-panel transition duration-200 hover:translate-y-[-1px] hover:border-accent-green/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-green active:scale-[0.985] ${highlightClass}`}
     >
       <article className="space-y-4">
         {coverImageUrl ? (
@@ -192,6 +214,9 @@ export function AdCard({
         <div className="space-y-3 px-4 pb-4">
           {description ? <p className="line-clamp-2 text-sm leading-5 text-text-secondary">{description}</p> : null}
           <div className="flex flex-wrap gap-2">
+            {promotionBadges.map((badge) => (
+              <StatChip key={badge} label={badge} tone="green" />
+            ))}
             {location ? <StatChip label={location} icon={<MapPin size={15} />} /> : null}
             {price ? <StatChip label={price} tone="green" /> : null}
             {category ? <StatChip label={category} tone="green" icon={<Tag size={15} />} /> : null}
@@ -203,6 +228,28 @@ export function AdCard({
       </article>
     </Link>
   );
+}
+
+function getPromotionBadges(promotion: AdCardProps['promotion']): string[] {
+  if (!promotion) {
+    return [];
+  }
+
+  const badges: string[] = [];
+
+  if (promotion.pinned) {
+    badges.push('Закреплено');
+  }
+
+  if (promotion.urgent) {
+    badges.push('Срочно');
+  }
+
+  if (promotion.recommended) {
+    badges.push('Рекомендуемое');
+  }
+
+  return badges;
 }
 
 function getTypeIcon(typeLabel: string) {

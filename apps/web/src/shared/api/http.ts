@@ -19,6 +19,7 @@ export class ApiError extends Error {
 }
 
 const apiBaseUrl = appEnv.apiBaseUrl;
+const defaultRequestTimeoutMs = 20_000;
 let accessToken: string | null = null;
 
 export function setApiAccessToken(token: string | null): void {
@@ -27,6 +28,7 @@ export function setApiAccessToken(token: string | null): void {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  const timeout = createTimeoutSignal(options.signal);
 
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -36,23 +38,60 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(toApiUrl(path), {
-    ...options,
-    headers
-  });
+  try {
+    const response = await fetch(toApiUrl(path), {
+      ...options,
+      cache: options.cache ?? 'no-store',
+      headers,
+      signal: timeout.signal
+    });
 
-  const body = await parseBody<ApiErrorBody | T>(response);
+    const body = await parseBody<ApiErrorBody | T>(response);
 
-  if (!response.ok) {
-    const errorBody = body as ApiErrorBody;
-    throw new ApiError(
-      errorBody.error?.message ?? 'Не удалось загрузить данные.',
-      response.status,
-      errorBody.error?.details
-    );
+    if (!response.ok) {
+      const errorBody = body as ApiErrorBody;
+      throw new ApiError(
+        errorBody.error?.message ?? 'Не удалось загрузить данные.',
+        response.status,
+        errorBody.error?.details
+      );
+    }
+
+    return body as T;
+  } catch (error) {
+    throw normalizeFetchError(error);
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+export async function apiTextRequest(path: string, options: RequestInit = {}): Promise<string> {
+  const headers = new Headers(options.headers);
+  const timeout = createTimeoutSignal(options.signal);
+
+  if (accessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  return body as T;
+  try {
+    const response = await fetch(toApiUrl(path), {
+      ...options,
+      cache: options.cache ?? 'no-store',
+      headers,
+      signal: timeout.signal
+    });
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new ApiError(text || 'Не удалось загрузить данные.', response.status);
+    }
+
+    return text;
+  } catch (error) {
+    throw normalizeFetchError(error);
+  } finally {
+    timeout.cleanup();
+  }
 }
 
 function toApiUrl(path: string): string {
@@ -84,4 +123,46 @@ async function parseBody<T>(response: Response): Promise<T | null> {
   } catch {
     throw new ApiError('Не удалось загрузить данные. Попробуйте ещё раз.', response.status || 500);
   }
+}
+
+function createTimeoutSignal(parentSignal?: AbortSignal | null): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  let settled = false;
+  const timeoutId = window.setTimeout(() => {
+    settled = true;
+    controller.abort();
+  }, defaultRequestTimeoutMs);
+
+  const abortFromParent = () => {
+    settled = true;
+    controller.abort();
+  };
+
+  if (parentSignal?.aborted) {
+    abortFromParent();
+  } else {
+    parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      window.clearTimeout(timeoutId);
+      if (!settled) {
+        parentSignal?.removeEventListener('abort', abortFromParent);
+      }
+    }
+  };
+}
+
+function normalizeFetchError(error: unknown): unknown {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return new ApiError('Сервер не ответил вовремя. Проверьте соединение и попробуйте ещё раз.', 408);
+  }
+
+  return error;
 }

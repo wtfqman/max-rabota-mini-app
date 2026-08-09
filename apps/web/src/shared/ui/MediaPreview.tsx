@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
-import { ImageOff } from 'lucide-react';
+import { ImageOff, Video } from 'lucide-react';
 
 interface MediaPreviewProps {
   src: string;
@@ -41,6 +41,21 @@ export function MediaPreview({
   }
 
   if (isVideoMedia(src, mimeType)) {
+    if (!controls) {
+      return (
+        <div
+          className={mergeClassName(
+            'flex flex-col items-center justify-center gap-1 bg-surface-900 px-3 text-center text-xs font-semibold leading-4 text-text-muted',
+            className
+          )}
+          aria-label={alt || 'Видео'}
+        >
+          <Video size={24} className="text-text-muted" />
+          <span>Видео</span>
+        </div>
+      );
+    }
+
     return (
       <video
         src={src}

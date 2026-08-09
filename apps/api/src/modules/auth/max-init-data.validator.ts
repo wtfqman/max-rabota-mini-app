@@ -17,6 +17,7 @@ const maxInitUserSchema = z
 export interface MaxInitDataValidatorOptions {
   botToken: string;
   maxAgeSeconds: number;
+  signatureCheckEnabled: boolean;
 }
 
 export class MaxInitDataValidator {
@@ -24,6 +25,12 @@ export class MaxInitDataValidator {
 
   validate(initData: string): ValidatedMaxInitData {
     const candidates = this.buildCandidateParams(initData);
+    const unsignedMatch = candidates.find((params) => params.has('hash') && params.has('auth_date') && params.has('user'));
+
+    if (!this.options.signatureCheckEnabled && unsignedMatch) {
+      return this.toValidatedInitData(unsignedMatch);
+    }
+
     const matched = candidates.find((params) => {
       const hash = params.get('hash');
 
@@ -45,13 +52,17 @@ export class MaxInitDataValidator {
       throw new AppError('Invalid MAX init data signature', 401);
     }
 
-    const authDate = this.parseAuthDate(matched.get('auth_date'));
-    const user = this.parseUser(matched.get('user'));
+    return this.toValidatedInitData(matched);
+  }
+
+  private toValidatedInitData(params: URLSearchParams): ValidatedMaxInitData {
+    const authDate = this.parseAuthDate(params.get('auth_date'));
+    const user = this.parseUser(params.get('user'));
 
     return {
-      queryId: matched.get('query_id') ?? undefined,
+      queryId: params.get('query_id') ?? undefined,
       authDate,
-      startParam: matched.get('start_param') ?? undefined,
+      startParam: params.get('start_param') ?? params.get('startapp') ?? undefined,
       user
     };
   }

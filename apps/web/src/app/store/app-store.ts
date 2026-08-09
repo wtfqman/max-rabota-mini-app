@@ -1,10 +1,12 @@
 ﻿import { create } from 'zustand';
+import { buildDisabledFeatureFlags, type PublicFeatureFlags } from '@rabst24/shared';
 import type {
   AuthPlatform,
   AuthProfile,
   AuthRole,
   AuthSession,
-  AuthStatus
+  AuthStatus,
+  VerifyMaxLaunchResponse
 } from '../../features/auth/auth.types.js';
 import { apiClient } from '../../shared/api/client.js';
 import { setApiAccessToken } from '../../shared/api/http.js';
@@ -13,6 +15,8 @@ import { appEnv } from '../../shared/config/app-env.js';
 import { getLaunchContext, notifyMaxAppReady } from '../../shared/max/max-bridge.js';
 
 export type AppInitStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+const persistedSessionKey = 'rabst24:auth-session';
 
 export interface CurrentUserState {
   id: string | null;
@@ -38,6 +42,7 @@ interface AppState {
   profile: AuthProfile | null;
   launch: LaunchState;
   user: CurrentUserState;
+  features: PublicFeatureFlags;
   initialize: () => Promise<void>;
   resetError: () => void;
 }
@@ -58,6 +63,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     role: 'user',
     status: null
   },
+  features: buildDisabledFeatureFlags(),
   initialize: async () => {
     if (get().initStatus === 'loading' || get().initStatus === 'ready') {
       return;
@@ -65,6 +71,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const launchContext = getLaunchContext();
     notifyMaxAppReady();
+
+    console.info('[MAX_AUTH]', {
+      hasInitData: Boolean(launchContext.initData),
+      isInsideMax: launchContext.isInsideMax,
+      platform: launchContext.platform
+    });
 
     set({
       initStatus: 'loading',
@@ -77,6 +89,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     try {
+      const featuresResponse = await apiClient.getFeatures().catch(() => null);
+      if (featuresResponse) {
+        set({
+          features: featuresResponse.data.flags
+        });
+      }
+
       let authResponse = null;
 
       if (launchContext.initData) {
@@ -86,12 +105,50 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       } else if (appEnv.devAuthEnabled) {
         authResponse = await apiClient.createDevSession();
+      } else {
+        const persisted = loadPersistedSession();
+
+        if (persisted) {
+          setApiAccessToken(persisted.session.accessToken);
+          const profileResponse = await apiClient.getMe();
+          const refreshedProfile = profileResponse.data;
+
+          console.info('[MAX_AUTH]', {
+            restoredPersistedSession: true,
+            userId: refreshedProfile.id,
+            expiresAt: persisted.session.expiresAt
+          });
+          set({
+            accessToken: persisted.session.accessToken,
+            session: persisted.session,
+            profile: refreshedProfile.profile,
+            user: {
+              id: refreshedProfile.id,
+              displayName: refreshedProfile.displayName,
+              role: refreshedProfile.role,
+              status: refreshedProfile.status
+            },
+            launch: {
+              isInsideMax: launchContext.isInsideMax,
+              platform: persisted.launch.platform,
+              queryId: persisted.launch.queryId,
+              startParam: persisted.launch.startParam,
+              authDate: persisted.launch.authDate
+            }
+          });
+        }
       }
 
       if (authResponse) {
         const auth = authResponse.data;
 
         setApiAccessToken(auth.session.accessToken);
+        savePersistedSession(auth);
+        console.info('[MAX_AUTH]', {
+          verified: true,
+          userId: auth.user.id,
+          expiresAt: auth.session.expiresAt
+        });
         set({
           accessToken: auth.session.accessToken,
           session: auth.session,
@@ -115,6 +172,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ initStatus: 'ready' });
     } catch (error) {
       setApiAccessToken(null);
+      clearPersistedSession();
       set({
         initStatus: 'error',
         accessToken: null,
@@ -128,3 +186,65 @@ export const useAppStore = create<AppState>((set, get) => ({
     void get().initialize();
   }
 }));
+
+type PersistedAuth = VerifyMaxLaunchResponse;
+
+function savePersistedSession(auth: PersistedAuth): void {
+  try {
+    window.localStorage.setItem(persistedSessionKey, JSON.stringify(auth));
+  } catch {
+    // Session persistence is best-effort; in-memory auth still works.
+  }
+}
+
+function loadPersistedSession(): PersistedAuth | null {
+  try {
+    const raw = window.localStorage.getItem(persistedSessionKey);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as PersistedAuth;
+    if (!isPersistedAuth(parsed)) {
+      clearPersistedSession();
+      return null;
+    }
+
+    const expiresAt = Date.parse(parsed.session?.expiresAt ?? '');
+
+    if (!parsed.session?.accessToken || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      clearPersistedSession();
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    clearPersistedSession();
+    return null;
+  }
+}
+
+function isPersistedAuth(value: unknown): value is PersistedAuth {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Partial<PersistedAuth>;
+
+  return (
+    typeof record.session?.accessToken === 'string' &&
+    typeof record.session.expiresAt === 'string' &&
+    typeof record.user?.id === 'string' &&
+    (record.user.role === 'user' || record.user.role === 'moderator' || record.user.role === 'admin') &&
+    (record.user.status === 'active' || record.user.status === 'blocked' || record.user.status === 'deleted')
+  );
+}
+
+function clearPersistedSession(): void {
+  try {
+    window.localStorage.removeItem(persistedSessionKey);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}

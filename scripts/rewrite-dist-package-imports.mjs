@@ -10,10 +10,11 @@ const packageEntries = new Map([
   ['@rabst24/core', path.join(distRoot, 'packages/core/src/index.js')],
   ['@rabst24/db', path.join(distRoot, 'packages/db/src/index.js')],
   ['@rabst24/max-api', path.join(distRoot, 'packages/max-api/src/index.js')],
-  ['@rabst24/shared', path.join(distRoot, 'packages/shared/src/index.js')]
+  ['@rabst24/shared', path.join(distRoot, 'packages/shared/src/index.js')],
+  ['@rabst24/telegram', path.join(distRoot, 'packages/telegram/src/index.js')]
 ]);
 
-const specifierPattern = /(['"])(@rabst24\/(?:bot-core|config|core|db|max-api|shared))\1/g;
+const specifierPattern = /(['"])(@rabst24\/(?:bot-core|config|core|db|max-api|shared|telegram))\1/g;
 
 for (const filePath of await listJavaScriptFiles(distRoot)) {
   const source = await readFile(filePath, 'utf8');

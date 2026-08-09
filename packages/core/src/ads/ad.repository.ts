@@ -1,7 +1,20 @@
-import { AdStatus, AdType, Prisma, UserStatus, type PrismaClient } from '@rabst24/db';
+import {
+  AdStatus,
+  AdType,
+  EquipmentCondition,
+  EmploymentType,
+  ListingDealType,
+  PaymentStatus,
+  Prisma,
+  ProductCondition,
+  UserStatus,
+  WorkFormat,
+  type PrismaClient
+} from '@rabst24/db';
 import type { AdListQueryDto, AdTypeCode } from '@rabst24/shared';
 import {
   buildTaxonomySearchVariants,
+  canonicalizeAdListQuery,
   canonicalizeCategory,
   canonicalizeDistrict,
   normalizeSearchText
@@ -18,7 +31,20 @@ export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
       lastName: true,
       displayName: true,
       status: true,
-      deletedAt: true
+      deletedAt: true,
+      profile: {
+        select: {
+          avatarUrl: true,
+          profileType: true,
+          companyName: true,
+          allowResumePublicProfile: true
+        }
+      },
+      trustBadgeAssignments: {
+        select: {
+          badge: true
+        }
+      }
     }
   },
   vacancyDetails: {
@@ -35,6 +61,7 @@ export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
   },
   resumeDetails: true,
   equipmentDetails: true,
+  productDetails: true,
   photos: {
     where: {
       deletedAt: null
@@ -77,6 +104,12 @@ export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
       createdAt: 'desc'
     },
     take: 5
+  },
+  payments: {
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 1
   }
 });
 
@@ -179,11 +212,11 @@ export interface ModerationQueueQuery {
 export class AdRepository {
   constructor(private readonly db: PrismaClient) {}
 
-  async createPending(data: Prisma.AdCreateInput) {
+  async createPending(data: Prisma.AdCreateInput, status: AdStatus = AdStatus.PENDING_MODERATION) {
     return this.db.ad.create({
       data: {
         ...data,
-        status: AdStatus.PENDING_MODERATION
+        status
       }
     });
   }
@@ -248,6 +281,7 @@ export class AdRepository {
     query: AdListQueryDto,
     forcedType?: AdTypeCode
   ): Promise<PublicAdListResult> {
+    await this.expirePromotionSortFields();
     const where = this.buildPublicWhere(query, forcedType);
     const page = query.page;
     const perPage = query.perPage;
@@ -257,6 +291,18 @@ export class AdRepository {
         where,
         include: adWithDetailsInclude,
         orderBy: [
+          {
+            promotionPinnedUntil: 'desc'
+          },
+          {
+            promotionRecommendedUntil: 'desc'
+          },
+          {
+            promotionUrgentUntil: 'desc'
+          },
+          {
+            boostedAt: 'desc'
+          },
           {
             publishedAt: 'desc'
           },
@@ -288,6 +334,17 @@ export class AdRepository {
       },
       include: adWithDetailsInclude
     });
+  }
+
+  async matchesPublicQuery(adId: string, query: AdListQueryDto, forcedType?: AdTypeCode): Promise<boolean> {
+    const count = await this.db.ad.count({
+      where: {
+        ...this.buildPublicWhere(query, forcedType),
+        id: adId
+      }
+    });
+
+    return count > 0;
   }
 
   async findWithDetailsById(adId: string): Promise<AdWithDetailsRecord | null> {
@@ -382,7 +439,8 @@ export class AdRepository {
       districtText?: string | null;
       categoryText?: string | null;
       desiredPosition?: string | null;
-    }
+    },
+    options: { statusAfterPublicEdit?: AdStatus } = {}
   ): Promise<AdWithDetailsRecord | null> {
     const existing = await this.db.ad.findFirst({
       where: {
@@ -392,7 +450,9 @@ export class AdRepository {
       },
       select: {
         id: true,
-        type: true
+        type: true,
+        status: true,
+        metadataJson: true
       }
     });
 
@@ -400,11 +460,17 @@ export class AdRepository {
       return null;
     }
 
+    const statusAfterPublicEdit = options.statusAfterPublicEdit ?? AdStatus.PENDING_MODERATION;
+    const statusUpdateData = this.requiresModerationAfterOwnerEdit(existing.status)
+      ? this.buildStatusUpdateData(statusAfterPublicEdit, existing.metadataJson)
+      : {};
+
     return this.db.ad.update({
       where: {
         id: adId
       },
       data: {
+        ...statusUpdateData,
         title: data.title,
         description: data.description,
         city: data.city,
@@ -485,7 +551,8 @@ export class AdRepository {
         },
         deletedAt: null,
         hiddenAt: null,
-        archivedAt: null
+        archivedAt: null,
+        AND: [this.buildVacancyFinanciallyEligibleWhere()]
       },
       data: this.buildStatusUpdateData(AdStatus.PUBLISHED)
     });
@@ -574,46 +641,159 @@ export class AdRepository {
   }
 
   private buildPublicWhere(query: AdListQueryDto, forcedType?: AdTypeCode): Prisma.AdWhereInput {
+    const canonicalQuery = canonicalizeAdListQuery(query, forcedType ?? query.type);
     const filters: Prisma.AdWhereInput[] = [];
 
-    if (query.q) {
-      filters.push(this.buildTextSearchWhere(query.q));
+    if (canonicalQuery.q) {
+      filters.push(this.buildTextSearchWhere(canonicalQuery.q));
     }
 
-    if (query.city) {
-      filters.push(this.buildLocationVariantWhere([query.city]));
+    if (canonicalQuery.city) {
+      filters.push(this.buildLocationVariantWhere([canonicalQuery.city]));
     }
 
-    const districtVariants = buildTaxonomySearchVariants(query.district, 'district');
+    const districtVariants = buildTaxonomySearchVariants(canonicalQuery.district, 'district');
     if (districtVariants.length) {
       filters.push(this.buildLocationVariantWhere(districtVariants));
     }
 
-    const categoryVariants = buildTaxonomySearchVariants(query.category, 'category');
+    const categoryVariants = buildTaxonomySearchVariants(canonicalQuery.category, 'category');
     if (categoryVariants.length) {
       filters.push(this.buildCategoryVariantWhere(categoryVariants));
     }
 
-    if (query.schedule || query.experience) {
+    if (canonicalQuery.schedule || canonicalQuery.experience) {
       filters.push({
         vacancyDetails: {
           is: {
-            schedule: query.schedule ? this.contains(query.schedule) : undefined,
-            experience: query.experience ? this.contains(query.experience) : undefined
+            schedule: canonicalQuery.schedule ? this.contains(canonicalQuery.schedule) : undefined,
+            experience: canonicalQuery.experience ? this.contains(canonicalQuery.experience) : undefined
           }
         }
       });
     }
 
-    const priceRangeWhere = this.buildPriceRangeWhere(query.priceFrom, query.priceTo);
+    if (canonicalQuery.employmentType || canonicalQuery.workFormat) {
+      filters.push({
+        OR: [
+          {
+            vacancyDetails: {
+              is: {
+                employmentType: this.normalizeEmploymentType(canonicalQuery.employmentType),
+                workFormat: this.normalizeWorkFormat(canonicalQuery.workFormat)
+              }
+            }
+          },
+          {
+            resumeDetails: {
+              is: {
+                employmentType: this.normalizeEmploymentType(canonicalQuery.employmentType),
+                workFormat: this.normalizeWorkFormat(canonicalQuery.workFormat)
+              }
+            }
+          }
+        ]
+      });
+    }
+
+    if (canonicalQuery.availability) {
+      filters.push({
+        resumeDetails: {
+          is: {
+            availability: this.contains(canonicalQuery.availability)
+          }
+        }
+      });
+    }
+
+    if (canonicalQuery.dealType || canonicalQuery.brand) {
+      filters.push({
+        equipmentDetails: {
+          is: {
+            dealType: this.normalizeListingDealType(canonicalQuery.dealType),
+            brand: canonicalQuery.brand ? this.contains(canonicalQuery.brand) : undefined
+          }
+        }
+      });
+    }
+
+    if (canonicalQuery.condition) {
+      filters.push({
+        OR: [
+          {
+            equipmentDetails: {
+              is: {
+                condition: this.normalizeEquipmentCondition(canonicalQuery.condition)
+              }
+            }
+          },
+          {
+            productDetails: {
+              is: {
+                condition: this.normalizeProductCondition(canonicalQuery.condition)
+              }
+            }
+          }
+        ]
+      });
+    }
+
+    const priceRangeWhere = this.buildPriceRangeWhere(canonicalQuery.priceFrom, canonicalQuery.priceTo);
     if (priceRangeWhere) {
       filters.push(priceRangeWhere);
     }
 
+    filters.push(this.buildVacancyFinanciallyEligibleWhere());
+
     return {
-      ...this.buildPublicBaseWhere(forcedType ?? query.type),
+      ...this.buildPublicBaseWhere(forcedType ?? canonicalQuery.type),
       AND: filters.length > 0 ? filters : undefined
     };
+  }
+
+  private async expirePromotionSortFields(now = new Date()): Promise<void> {
+    await this.db.$transaction([
+      this.db.ad.updateMany({
+        where: {
+          promotionPinnedUntil: {
+            lt: now
+          }
+        },
+        data: {
+          promotionPinnedUntil: null
+        }
+      }),
+      this.db.ad.updateMany({
+        where: {
+          promotionRecommendedUntil: {
+            lt: now
+          }
+        },
+        data: {
+          promotionRecommendedUntil: null
+        }
+      }),
+      this.db.ad.updateMany({
+        where: {
+          promotionUrgentUntil: {
+            lt: now
+          }
+        },
+        data: {
+          promotionUrgentUntil: null
+        }
+      }),
+      this.db.ad.updateMany({
+        where: {
+          promotionHighlightedUntil: {
+            lt: now
+          }
+        },
+        data: {
+          promotionHighlightedUntil: null
+        }
+      })
+    ]);
   }
 
   private buildPublicBaseWhere(type?: AdTypeCode): Prisma.AdWhereInput {
@@ -658,11 +838,66 @@ export class AdRepository {
 
     const status = this.mapStatus(query.status) ?? AdStatus.PENDING_MODERATION;
 
+    const moderationFilters = [...filters];
+
+    if (status === AdStatus.PENDING_MODERATION) {
+      moderationFilters.push(this.buildVacancyFinanciallyEligibleWhere());
+    }
+
+    if (status === AdStatus.PENDING_MODERATION) {
+      return {
+        deletedAt: null,
+        type: query.type ? this.mapAdType(query.type) : undefined,
+        OR: [
+          {
+            status,
+            AND: moderationFilters.length > 0 ? moderationFilters : undefined
+          },
+          {
+            status: {
+              in: [AdStatus.REJECTED, AdStatus.APPROVED, AdStatus.PUBLISHED, AdStatus.HIDDEN, AdStatus.ARCHIVED]
+            },
+            metadataJson: {
+              contains: '"activeRevisionStatus":"PENDING_MODERATION"'
+            },
+            AND: moderationFilters.length > 0 ? moderationFilters : undefined
+          }
+        ]
+      };
+    }
+
     return {
       status,
       deletedAt: status === AdStatus.DELETED ? { not: null } : null,
       type: query.type ? this.mapAdType(query.type) : undefined,
-      AND: filters.length > 0 ? filters : undefined
+      AND: moderationFilters.length > 0 ? moderationFilters : undefined
+    };
+  }
+
+  private buildVacancyFinanciallyEligibleWhere(): Prisma.AdWhereInput {
+    return {
+      OR: [
+        {
+          type: {
+            not: AdType.VACANCY
+          }
+        },
+        {
+          vacancyPublicationUsages: {
+            some: {
+              returnedAt: null
+            }
+          }
+        },
+        {
+          payments: {
+            some: {
+              status: PaymentStatus.SUCCEEDED,
+              refundedAt: null
+            }
+          }
+        }
+      ]
     };
   }
 
@@ -726,6 +961,12 @@ export class AdRepository {
               },
               {
                 experience: textFilter
+              },
+              {
+                paymentFormat: textFilter
+              },
+              {
+                projectDuration: textFilter
               }
             ]
           }
@@ -737,6 +978,15 @@ export class AdRepository {
             OR: [
               {
                 desiredPosition: textFilter
+              },
+              {
+                profession: textFilter
+              },
+              {
+                specialization: textFilter
+              },
+              {
+                experienceText: textFilter
               },
               {
                 education: textFilter
@@ -760,6 +1010,23 @@ export class AdRepository {
               },
               {
                 model: textFilter
+              }
+            ]
+          }
+        }
+      },
+      {
+        productDetails: {
+          is: {
+            OR: [
+              {
+                manufacturer: textFilter
+              },
+              {
+                model: textFilter
+              },
+              {
+                unit: textFilter
               }
             ]
           }
@@ -931,6 +1198,39 @@ export class AdRepository {
     };
   }
 
+  private normalizeEnumFilter(value: string): string {
+    return value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  }
+
+  private normalizeEmploymentType(value?: string): EmploymentType | undefined {
+    return this.pickEnumValue(EmploymentType, value);
+  }
+
+  private normalizeWorkFormat(value?: string): WorkFormat | undefined {
+    return this.pickEnumValue(WorkFormat, value);
+  }
+
+  private normalizeListingDealType(value?: string): ListingDealType | undefined {
+    return this.pickEnumValue(ListingDealType, value);
+  }
+
+  private normalizeEquipmentCondition(value?: string): EquipmentCondition | undefined {
+    return this.pickEnumValue(EquipmentCondition, value);
+  }
+
+  private normalizeProductCondition(value?: string): ProductCondition | undefined {
+    return this.pickEnumValue(ProductCondition, value);
+  }
+
+  private pickEnumValue<TValue extends string>(values: Record<string, TValue>, value?: string): TValue | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const normalized = this.normalizeEnumFilter(value);
+    return Object.values(values).find((item) => item === normalized);
+  }
+
   private buildLocationVariantWhere(variants: string[]): Prisma.AdWhereInput {
     const searchVariants = this.expandSearchVariants(variants);
 
@@ -1030,6 +1330,10 @@ export class AdRepository {
       return AdStatus.DRAFT;
     }
 
+    if (normalized === 'payment_pending') {
+      return AdStatus.PAYMENT_PENDING;
+    }
+
     if (normalized === 'pending_moderation') {
       return AdStatus.PENDING_MODERATION;
     }
@@ -1061,9 +1365,15 @@ export class AdRepository {
     return undefined;
   }
 
+  private requiresModerationAfterOwnerEdit(status: AdStatus): boolean {
+    return status === AdStatus.APPROVED || status === AdStatus.PUBLISHED;
+  }
+
   private buildStatusUpdateData(status: AdStatus, metadataJson?: string | null): Prisma.AdUpdateInput {
     const now = new Date();
     const shouldDisableAutoRepeat =
+      status === AdStatus.PAYMENT_PENDING ||
+      status === AdStatus.PENDING_MODERATION ||
       status === AdStatus.REJECTED ||
       status === AdStatus.HIDDEN ||
       status === AdStatus.ARCHIVED ||
@@ -1077,9 +1387,9 @@ export class AdRepository {
       moderatedAt:
         status === AdStatus.APPROVED || status === AdStatus.REJECTED ? now : undefined,
       publishedAt: status === AdStatus.PUBLISHED ? now : undefined,
-      hiddenAt: status === AdStatus.HIDDEN ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
-      archivedAt: status === AdStatus.ARCHIVED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
-      deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      hiddenAt: status === AdStatus.HIDDEN ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      archivedAt: status === AdStatus.ARCHIVED ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
+      deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
       metadataJson: currentPublicationSettings?.autoRepeat
         ? mergeAdPublicationSettings(metadataJson, {
             ...currentPublicationSettings,

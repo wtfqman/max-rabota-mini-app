@@ -47,6 +47,13 @@ export interface PublicAdCardDto {
   address: string | null;
   category: string | null;
   chips: PublicAdChipDto[];
+  promotion: {
+    urgent: boolean;
+    pinned: boolean;
+    highlighted: boolean;
+    recommended: boolean;
+    boostedAt: string | null;
+  };
   publishedAt: string | null;
   createdAt: string;
 }
@@ -63,6 +70,24 @@ export interface PublicAdBaseDetailDto extends PublicAdCardDto {
     maxUsername: string | null;
     firstName: string | null;
     lastName: string | null;
+    profile: {
+      avatarUrl: string | null;
+      profileType: string;
+      companyName: string | null;
+      allowResumePublicProfile: boolean;
+    } | null;
+    trustBadges: string[];
+  };
+  contactAccess?: {
+    canViewContacts: boolean;
+    maskedContact: string | null;
+    contactStatus?: string;
+    verified?: boolean;
+    canPurchaseContact?: boolean;
+    purchasePrice?: string;
+    accessMode?: string;
+    alreadyPurchased?: boolean;
+    unlockStatus?: string | null;
   };
   updatedAt: string;
 }
@@ -81,7 +106,11 @@ export interface PublicVacancyDetailDto extends PublicAdBaseDetailDto {
     salaryTo: string | null;
     salaryCurrency: string;
     salaryPeriod: string | null;
+    paymentFormat: string | null;
     isSalaryNegotiable: boolean;
+    providesAccommodation: boolean;
+    providesMeals: boolean;
+    projectDuration: string | null;
     metroStations: PublicMetroStationDto[];
   };
   requirements: string[];
@@ -94,16 +123,20 @@ export interface PublicResumeDetailDto extends PublicAdBaseDetailDto {
   resume: {
     name: string;
     profession: string | null;
+    specialization: string | null;
     desiredPosition: string | null;
     experienceText: string | null;
     experienceYears: number | null;
     employmentType: string | null;
     workFormat: string | null;
+    desiredSchedule: string | null;
     expectedSalary: string | null;
     salaryCurrency: string;
     skills: string[];
     education: string | null;
     availability: string | null;
+    travelReady: boolean;
+    siteAccommodationReady: boolean;
     portfolioUrl: string | null;
   };
 }
@@ -113,14 +146,20 @@ export interface PublicEquipmentDetailDto extends PublicAdBaseDetailDto {
   equipment: {
     name: string;
     category: string | null;
+    dealType: string | null;
     condition: string | null;
     brand: string | null;
     model: string | null;
     productionYear: number | null;
+    hourlyPrice: string | null;
+    shiftPrice: string | null;
+    dailyPrice: string | null;
     rentalPrice: string | null;
     salePrice: string | null;
     depositAmount: string | null;
     currency: string;
+    operatorIncluded: boolean;
+    deliveryAvailable: boolean;
     availability: string | null;
   };
 }
@@ -133,6 +172,13 @@ export interface PublicProductDetailDto extends PublicAdBaseDetailDto {
     price: string | null;
     currency: string;
     address: string | null;
+    manufacturer: string | null;
+    model: string | null;
+    condition: string | null;
+    quantity: string | null;
+    unit: string | null;
+    saleType: string | null;
+    deliveryAvailable: boolean;
   };
 }
 

@@ -1,0 +1,18 @@
+{
+  "name": "@rabst24/telegram-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node ../../dist/apps/telegram-bot/src/main.js"
+  },
+  "dependencies": {
+    "@rabst24/config": "file:../../packages/config",
+    "@rabst24/core": "file:../../packages/core",
+    "@rabst24/db": "file:../../packages/db",
+    "@rabst24/shared": "file:../../packages/shared",
+    "@rabst24/telegram": "file:../../packages/telegram",
+    "grammy": "^1.45.1"
+  }
+}

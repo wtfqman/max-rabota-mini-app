@@ -19,12 +19,15 @@
       "@rabst24/core": ["packages/core/src/index.ts"],
       "@rabst24/db": ["packages/db/src/index.ts"],
       "@rabst24/max-api": ["packages/max-api/src/index.ts"],
-      "@rabst24/shared": ["packages/shared/src/index.ts"]
+      "@rabst24/shared": ["packages/shared/src/index.ts"],
+      "@rabst24/telegram": ["packages/telegram/src/index.ts"]
     }
   },
   "include": [
     "apps/api/src/**/*.ts",
     "apps/bot/src/**/*.ts",
+    "apps/telegram-bot/src/**/*.ts",
+    "tests/**/*.ts",
     "packages/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "apps/web"]

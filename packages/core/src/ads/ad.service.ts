@@ -1,16 +1,11 @@
 import { AdStatus, AdType, type Ad, type Prisma } from '@rabst24/db';
 import { AppError, type AdListQueryDto, type AdTypeCode, type CreateAdDto } from '@rabst24/shared';
-import type { DuplicateCandidateRecord, ModerationQueueQuery, OwnedAdListQuery, AdRepository } from './ad.repository.js';
+import type { ModerationQueueQuery, OwnedAdListQuery, AdRepository } from './ad.repository.js';
 import { getAdPublicationSettings, mergeAdPublicationSettings, type AdPublicationSettings } from './ad-publication-settings.js';
 
 export class AdService {
   private static readonly maxPhotos = 8;
   private static readonly maxVideos = 1;
-  private static readonly duplicateWindowMs = 24 * 60 * 60 * 1000;
-  private static readonly duplicateFullSimilarityThreshold = 0.86;
-  private static readonly duplicateTitleSimilarityThreshold = 0.75;
-  private static readonly duplicateTextSimilarityThreshold = 0.72;
-  private static readonly duplicateMinSoftTokens = 6;
   private readonly creationLocks = new Map<string, Promise<void>>();
 
   constructor(private readonly adRepository: AdRepository) {}
@@ -69,9 +64,10 @@ export class AdService {
       districtText?: string | null;
       categoryText?: string | null;
       desiredPosition?: string | null;
-    }
+    },
+    options: { statusAfterPublicEdit?: AdStatus } = {}
   ) {
-    const ad = await this.adRepository.updateOwned(ownerId, adId, dto);
+    const ad = await this.adRepository.updateOwned(ownerId, adId, dto, options);
 
     if (!ad) {
       throw new AppError('Ad not found', 404, { adId });
@@ -175,13 +171,15 @@ export class AdService {
     return ad;
   }
 
-  async createAdForModeration(ownerId: string, dto: CreateAdDto): Promise<Ad> {
+  async createAdForModeration(
+    ownerId: string,
+    dto: CreateAdDto,
+    options: { initialStatus?: AdStatus } = {}
+  ): Promise<Ad> {
     const media = this.validateMediaSet(dto.photos);
     const adType = this.mapAdType(dto.type);
 
     return this.withCreationLock(this.getCreationLockKey(ownerId, adType), async () => {
-      await this.ensureNotRecentDuplicate(ownerId, adType, dto);
-
       const data: Prisma.AdCreateInput = {
         owner: {
           connect: {
@@ -252,10 +250,21 @@ export class AdService {
             ? {
                 create: {
                   desiredPosition: dto.resume.desiredPosition,
+                  profession: dto.resume.profession,
+                  specialization: dto.resume.specialization,
                   experienceYears: dto.resume.experienceYears,
+                  experienceText: dto.resume.experienceText,
+                  employmentType: dto.resume.employmentType,
+                  workFormat: dto.resume.workFormat,
+                  desiredSchedule: dto.resume.desiredSchedule,
                   expectedSalary: dto.resume.expectedSalary,
                   salaryCurrency: dto.resume.salaryCurrency ?? 'RUB',
-                  skillsJson: JSON.stringify(dto.resume.skills ?? [])
+                  skillsJson: JSON.stringify(dto.resume.skills ?? []),
+                  education: dto.resume.education,
+                  availability: dto.resume.availability,
+                  travelReady: dto.resume.travelReady ?? false,
+                  siteAccommodationReady: dto.resume.siteAccommodationReady ?? false,
+                  portfolioUrl: dto.resume.portfolioUrl
                 }
               }
             : undefined,
@@ -264,83 +273,19 @@ export class AdService {
             ? {
                 create: dto.equipment
               }
+            : undefined,
+        productDetails:
+          (dto.type === 'material' || dto.type === 'tool') && dto.product
+            ? {
+                create: dto.product
+              }
             : undefined
       };
 
-      const ad = await this.adRepository.createPending(data);
-      await this.ensureCreatedAdIsNotDuplicate(ownerId, adType, dto, ad);
+      const ad = await this.adRepository.createPending(data, options.initialStatus);
 
       return ad;
     });
-  }
-
-  private async ensureNotRecentDuplicate(ownerId: string, adType: AdType, dto: CreateAdDto): Promise<void> {
-    const createdSince = new Date(Date.now() - AdService.duplicateWindowMs);
-    const candidateAds = await this.adRepository.listRecentDuplicateCandidates(ownerId, adType, createdSince);
-    const next = this.buildDuplicateComparable(dto, adType);
-
-    for (const candidate of candidateAds) {
-      const current = this.buildCandidateComparable(candidate);
-      const match = this.getDuplicateMatch(next, current);
-
-      if (!match.isDuplicate) {
-        continue;
-      }
-
-      throw this.createDuplicateAdError(candidate, match);
-    }
-  }
-
-  private async ensureCreatedAdIsNotDuplicate(
-    ownerId: string,
-    adType: AdType,
-    dto: CreateAdDto,
-    createdAd: Ad
-  ): Promise<void> {
-    const createdSince = new Date(Date.now() - AdService.duplicateWindowMs);
-    const candidateAds = await this.adRepository.listRecentDuplicateCandidates(ownerId, adType, createdSince);
-    const next = this.buildDuplicateComparable(dto, adType);
-
-    for (const candidate of candidateAds) {
-      if (candidate.id === createdAd.id || !this.isOlderDuplicateCandidate(candidate, createdAd)) {
-        continue;
-      }
-
-      const current = this.buildCandidateComparable(candidate);
-      const match = this.getDuplicateMatch(next, current);
-
-      if (!match.isDuplicate) {
-        continue;
-      }
-
-      await this.adRepository.softDelete(createdAd.id);
-      throw this.createDuplicateAdError(candidate, match);
-    }
-  }
-
-  private createDuplicateAdError(
-    candidate: DuplicateCandidateRecord,
-    match: { reason: string; similarity: number }
-  ): AppError {
-    return new AppError(
-      'Похожее объявление уже отправлялось сегодня. Обновите существующее объявление или попробуйте завтра.',
-      409,
-      {
-        code: 'DUPLICATE_AD',
-        duplicateAdId: candidate.id,
-        duplicateCreatedAt: candidate.createdAt.toISOString(),
-        duplicateStatus: candidate.status.toLowerCase(),
-        matchReason: match.reason,
-        similarity: match.similarity
-      }
-    );
-  }
-
-  private isOlderDuplicateCandidate(candidate: DuplicateCandidateRecord, createdAd: Ad): boolean {
-    const candidateCreatedAt = candidate.createdAt.getTime();
-    const createdAt = createdAd.createdAt.getTime();
-
-    return candidateCreatedAt < createdAt || (candidateCreatedAt === createdAt && candidate.id < createdAd.id);
   }
 
   private getCreationLockKey(ownerId: string, adType: AdType): string {
@@ -366,245 +311,6 @@ export class AdService {
       if (this.creationLocks.get(key) === next) {
         this.creationLocks.delete(key);
       }
-    }
-  }
-
-  private getDuplicateMatch(
-    next: DuplicateComparable,
-    current: DuplicateComparable
-  ): { isDuplicate: true; reason: string; similarity: number } | { isDuplicate: false } {
-    if (next.signature && next.signature === current.signature) {
-      return {
-        isDuplicate: true,
-        reason: 'exact',
-        similarity: 1
-      };
-    }
-
-    if (next.tokens.length < AdService.duplicateMinSoftTokens || current.tokens.length < AdService.duplicateMinSoftTokens) {
-      return { isDuplicate: false };
-    }
-
-    if (!this.areRolesCompatible(next.roleTokens, current.roleTokens)) {
-      return { isDuplicate: false };
-    }
-
-    const fullSimilarity = this.tokenDice(next.tokens, current.tokens);
-    const titleSimilarity = this.tokenDice(next.titleTokens, current.titleTokens);
-
-    if (fullSimilarity >= AdService.duplicateFullSimilarityThreshold) {
-      return {
-        isDuplicate: true,
-        reason: 'similar_text',
-        similarity: Number(fullSimilarity.toFixed(3))
-      };
-    }
-
-    if (
-      titleSimilarity >= AdService.duplicateTitleSimilarityThreshold &&
-      fullSimilarity >= AdService.duplicateTextSimilarityThreshold
-    ) {
-      return {
-        isDuplicate: true,
-        reason: 'similar_title_and_text',
-        similarity: Number(fullSimilarity.toFixed(3))
-      };
-    }
-
-    return { isDuplicate: false };
-  }
-
-  private areRolesCompatible(nextTokens: string[], currentTokens: string[]): boolean {
-    if (nextTokens.length === 0 || currentTokens.length === 0) {
-      return true;
-    }
-
-    const next = new Set(nextTokens);
-    const current = new Set(currentTokens);
-    let overlap = 0;
-
-    for (const token of next) {
-      if (current.has(token)) {
-        overlap += 1;
-      }
-    }
-
-    return overlap / Math.min(next.size, current.size) >= 0.25;
-  }
-
-  private buildDuplicateComparable(dto: CreateAdDto, adType: AdType): DuplicateComparable {
-    const metadata = this.stringifyMetadata(dto.metadata);
-    const roleText = this.joinText([
-      dto.title,
-      dto.categoryText,
-      dto.vacancy?.position,
-      dto.resume?.desiredPosition,
-      dto.equipment?.categoryText,
-      dto.equipment?.brand,
-      dto.equipment?.model
-    ]);
-    const priceText = this.joinText([
-      dto.priceAmount,
-      dto.vacancy?.salaryFrom,
-      dto.vacancy?.salaryTo,
-      dto.vacancy?.salaryPeriod,
-      dto.resume?.expectedSalary
-    ]);
-    const fullText = this.joinText([
-      adType,
-      dto.title,
-      dto.description,
-      dto.city,
-      dto.districtText,
-      dto.categoryText,
-      priceText,
-      metadata,
-      dto.requirements,
-      dto.responsibilities,
-      dto.benefits,
-      dto.vacancy?.companyName,
-      dto.vacancy?.position,
-      dto.vacancy?.schedule,
-      dto.vacancy?.experience,
-      dto.resume?.desiredPosition,
-      dto.equipment?.categoryText,
-      dto.equipment?.brand,
-      dto.equipment?.model
-    ]);
-
-    return this.toDuplicateComparable(fullText, dto.title, roleText);
-  }
-
-  private buildCandidateComparable(candidate: DuplicateCandidateRecord): DuplicateComparable {
-    const metadata = this.stringifyMetadata(this.parseMetadata(candidate.metadataJson));
-    const roleText = this.joinText([
-      candidate.title,
-      candidate.categoryText,
-      candidate.vacancyDetails?.position,
-      candidate.resumeDetails?.desiredPosition,
-      candidate.equipmentDetails?.categoryText,
-      candidate.equipmentDetails?.brand,
-      candidate.equipmentDetails?.model
-    ]);
-    const priceText = this.joinText([
-      candidate.priceAmount,
-      candidate.vacancyDetails?.salaryFrom,
-      candidate.vacancyDetails?.salaryTo,
-      candidate.vacancyDetails?.salaryPeriod,
-      candidate.resumeDetails?.expectedSalary
-    ]);
-    const fullText = this.joinText([
-      candidate.type,
-      candidate.title,
-      candidate.description,
-      candidate.city,
-      candidate.districtText,
-      candidate.categoryText,
-      priceText,
-      metadata,
-      candidate.requirements.map((item) => item.text),
-      candidate.responsibilities.map((item) => item.text),
-      candidate.benefits.map((item) => item.text),
-      candidate.vacancyDetails?.companyName,
-      candidate.vacancyDetails?.position,
-      candidate.vacancyDetails?.schedule,
-      candidate.vacancyDetails?.experience,
-      candidate.resumeDetails?.desiredPosition,
-      candidate.equipmentDetails?.categoryText,
-      candidate.equipmentDetails?.brand,
-      candidate.equipmentDetails?.model
-    ]);
-
-    return this.toDuplicateComparable(fullText, candidate.title, roleText);
-  }
-
-  private toDuplicateComparable(fullText: string, title: string, roleText: string): DuplicateComparable {
-    const signature = this.normalizeText(fullText);
-
-    return {
-      signature,
-      tokens: this.tokenize(signature),
-      titleTokens: this.tokenize(this.normalizeText(title)),
-      roleTokens: this.tokenize(this.normalizeText(roleText))
-    };
-  }
-
-  private tokenDice(leftTokens: string[], rightTokens: string[]): number {
-    if (leftTokens.length === 0 || rightTokens.length === 0) {
-      return 0;
-    }
-
-    const left = new Set(leftTokens);
-    const right = new Set(rightTokens);
-    let overlap = 0;
-
-    for (const token of left) {
-      if (right.has(token)) {
-        overlap += 1;
-      }
-    }
-
-    return (2 * overlap) / (left.size + right.size);
-  }
-
-  private tokenize(value: string): string[] {
-    if (!value) {
-      return [];
-    }
-
-    return value
-      .split(' ')
-      .map((token) => token.trim())
-      .filter((token) => token.length > 1 && !duplicateStopWords.has(token));
-  }
-
-  private normalizeText(value: string): string {
-    return value
-      .toLocaleLowerCase('ru-RU')
-      .replace(/ё/g, 'е')
-      .replace(/https?:\/\/\S+/g, ' ')
-      .replace(/[^\p{L}\p{N}]+/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private joinText(values: unknown[]): string {
-    return values.flatMap((value) => this.flattenText(value)).join(' ');
-  }
-
-  private flattenText(value: unknown): string[] {
-    if (value === null || value === undefined) {
-      return [];
-    }
-
-    if (Array.isArray(value)) {
-      return value.flatMap((item) => this.flattenText(item));
-    }
-
-    if (typeof value === 'object') {
-      return Object.entries(value as Record<string, unknown>)
-        .filter(([key]) => key !== 'publicationSettings')
-        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-        .flatMap(([, entryValue]) => this.flattenText(entryValue));
-    }
-
-    return [String(value)];
-  }
-
-  private stringifyMetadata(metadata: Record<string, unknown> | undefined): string {
-    return this.joinText([metadata ?? {}]);
-  }
-
-  private parseMetadata(metadataJson: string | null): Record<string, unknown> | undefined {
-    if (!metadataJson) {
-      return undefined;
-    }
-
-    try {
-      const parsed = JSON.parse(metadataJson) as unknown;
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
-    } catch {
-      return undefined;
     }
   }
 
@@ -656,64 +362,3 @@ export class AdService {
   }
 
 }
-
-interface DuplicateComparable {
-  signature: string;
-  tokens: string[];
-  titleTokens: string[];
-  roleTokens: string[];
-}
-
-const duplicateStopWords = new Set([
-  'в',
-  'во',
-  'и',
-  'или',
-  'на',
-  'по',
-  'за',
-  'для',
-  'с',
-  'со',
-  'от',
-  'до',
-  'из',
-  'к',
-  'ко',
-  'у',
-  'о',
-  'об',
-  'без',
-  'при',
-  'это',
-  'как',
-  'что',
-  'требуется',
-  'требуются',
-  'нужен',
-  'нужна',
-  'нужны',
-  'ищем',
-  'работа',
-  'работу',
-  'работник',
-  'работники',
-  'рабочий',
-  'рабочие',
-  'специалист',
-  'специалисты',
-  'мастер',
-  'мастера',
-  'бригада',
-  'бригады',
-  'услуга',
-  'услуги',
-  'объект',
-  'объекты',
-  'день',
-  'дня',
-  'руб',
-  'рублей',
-  'р',
-  '₽'
-]);

@@ -22,7 +22,7 @@ export class StartHandler {
   ) {}
 
   async handleBotStarted(update: MaxBotStartedUpdate): Promise<void> {
-    await this.registerAndWelcome(update.user, update.user_locale);
+    await this.registerAndWelcome(update.user, update.user_locale, update.payload);
   }
 
   async handleStartMessage(update: MaxMessageCreatedUpdate): Promise<void> {
@@ -38,7 +38,7 @@ export class StartHandler {
       return;
     }
 
-    await this.registerAndWelcome(sender, update.user_locale);
+    await this.registerAndWelcome(sender, update.user_locale, parseStartMessagePayload(update.message.body?.text));
   }
 
   async handleIdMessage(update: MaxMessageCreatedUpdate): Promise<void> {
@@ -68,8 +68,10 @@ export class StartHandler {
     logger.info({ userId: user.id, maxUserId }, 'Sent MAX id to user');
   }
 
-  private async registerAndWelcome(maxUser: MaxUser, locale?: string | null): Promise<void> {
-    const user = await this.userService.registerFromMaxUser(maxUser, locale);
+  private async registerAndWelcome(maxUser: MaxUser, locale?: string | null, startParam?: string | null): Promise<void> {
+    const user = await this.userService.registerFromMaxUser(maxUser, locale, {
+      startParam
+    });
     const keyboard = createStartKeyboard({
       miniAppUrl: this.options.miniAppUrl,
       miniAppWebApp: this.options.miniAppWebApp,
@@ -105,4 +107,16 @@ export class StartHandler {
 
     logger.info({ userId: user.id, maxUserId: user.maxUserId.toString() }, 'User started bot');
   }
+}
+
+function parseStartMessagePayload(text: string | null | undefined): string | null {
+  const normalized = text?.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const match = /^\/start(?:@\S+)?(?:\s+(.+))?$/i.exec(normalized);
+
+  return match?.[1]?.trim() || null;
 }

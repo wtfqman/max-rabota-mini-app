@@ -19,6 +19,18 @@ enum UserStatus {
   DELETED
 }
 
+enum ProfileType {
+  PERSON
+  COMPANY
+}
+
+enum UserTrustBadge {
+  PHONE_CONFIRMED
+  COMPANY_VERIFIED
+  RELIABLE_EMPLOYER
+  LONG_TIME_MEMBER
+}
+
 enum AdType {
   VACANCY
   RESUME
@@ -29,6 +41,7 @@ enum AdType {
 
 enum AdStatus {
   DRAFT
+  PAYMENT_PENDING
   PENDING_MODERATION
   APPROVED
   REJECTED
@@ -68,6 +81,24 @@ enum EquipmentCondition {
   REFURBISHED
 }
 
+enum ListingDealType {
+  RENT
+  SALE
+  RENT_AND_SALE
+}
+
+enum ProductSaleType {
+  RETAIL
+  WHOLESALE
+  BOTH
+}
+
+enum ProductCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
 enum AdContactType {
   MAX
   PHONE
@@ -88,6 +119,28 @@ enum ModerationAction {
   CHANNEL_REMOVED
   RESTORED
   AUTO_FLAGGED
+  REPORT_RESOLVED
+  USER_WARNED
+  USER_TEMP_BLOCKED
+  USER_BLOCKED
+}
+
+enum AdReportReason {
+  FRAUD
+  FALSE_INFORMATION
+  NOT_ACTUAL
+  WRONG_PRICE
+  SPAM
+  PROHIBITED_CONTENT
+  OTHER
+}
+
+enum AdReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED_ACTION_TAKEN
+  RESOLVED_NO_VIOLATION
+  CANCELLED
 }
 
 enum ReviewStatus {
@@ -106,6 +159,177 @@ enum ChannelPublishStatus {
   REMOVE_FAILED
 }
 
+enum TelegramAccountStatus {
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum TelegramTargetType {
+  CHANNEL
+  GROUP
+  SUPERGROUP
+}
+
+enum TelegramTargetStatus {
+  READY
+  NOT_ADDED
+  NO_PERMISSION
+  UNAVAILABLE
+  DISABLED
+  TESTING
+  ERROR
+}
+
+enum ExternalPublicationPlatform {
+  MAX
+  TELEGRAM
+}
+
+enum ExternalPublicationSourcePlatform {
+  RABST24
+  MAX
+  TELEGRAM
+}
+
+enum ExternalPublicationStatus {
+  PENDING
+  PUBLISHED
+  EDITED
+  DELETED
+  FAILED
+  SKIPPED
+}
+
+enum TelegramMediaGroupBufferStatus {
+  COLLECTING
+  FINALIZED
+  FAILED
+  EXPIRED
+}
+
+enum TelegramLinkTokenStatus {
+  PENDING
+  CONSUMED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  WAITING_FOR_CAPTURE
+  SUCCEEDED
+  CANCELED
+  REFUNDED
+}
+
+enum OutboxJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum JobApplicationStatus {
+  NEW
+  VIEWED
+  CONTACTED
+  SUITABLE
+  REJECTED
+  WITHDRAWN
+}
+
+enum NotificationDeliveryChannel {
+  MAX
+  IN_APP
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum SavedSearchFrequency {
+  IMMEDIATE
+  DAILY
+  OFF
+}
+
+enum PromotionProductType {
+  BUMP_ONCE
+  URGENT_BADGE
+  PIN_CATEGORY
+  HIGHLIGHT_CARD
+  RECOMMENDED
+  AUTO_BUMP
+}
+
+enum VacancyPublicationGrantSource {
+  REFERRAL
+}
+
+enum VacancyPublicationUsageSource {
+  PACKAGE
+  BONUS
+  MIXED
+}
+
+enum VerifiedContactType {
+  PHONE
+  MAX_ACCOUNT
+}
+
+enum ContactSource {
+  MAX_MINI_APP
+  MAX_BOT
+  SMS_OTP
+  ADMIN_VERIFIED
+  UNVERIFIED_LEGACY
+}
+
+enum ContactStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  REVOKED
+  DISPUTED
+}
+
+enum ContactAccessMode {
+  MAX_VERIFIED_CONNECTION
+  VERIFIED_PHONE_UNLOCK
+}
+
+enum ContactAccessStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  REVOKED
+  REFUNDED
+  DISPUTED
+}
+
+enum ContactDisputeReason {
+  NUMBER_DOES_NOT_EXIST
+  WRONG_PERSON
+  UNABLE_TO_CONNECT
+  CONTACT_DIFFERS
+  SUSPICIOUS_BEHAVIOR
+  OTHER
+}
+
+enum ContactDisputeStatus {
+  OPEN
+  AWAITING_REVERIFICATION
+  UNDER_REVIEW
+  RESOLVED_VALID_CONTACT
+  RESOLVED_REFUND
+  REJECTED_ABUSE
+}
+
 model User {
   id              String   @id @default(cuid())
   maxUserId       String   @unique @map("max_user_id")
@@ -116,6 +340,7 @@ model User {
   locale          String?
   role            UserRole @default(USER)
   status          UserStatus @default(ACTIVE)
+  blockedUntil    DateTime? @map("blocked_until")
   startedAt       DateTime? @map("started_at")
   lastSeenAt      DateTime? @map("last_seen_at")
   deletedAt       DateTime? @map("deleted_at")
@@ -124,10 +349,38 @@ model User {
 
   profile         UserProfile?
   ads             Ad[]
+  adRevisions     AdRevision[]
   favorites       Favorite[]
   reviewsWritten  Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewSubject")
   moderationLogs  ModerationLog[] @relation("ModerationLogModerator")
+  referralsMade   Referral[] @relation("ReferralReferrer")
+  referralReceived Referral? @relation("ReferralReferred")
+  vacancyPublicationGrants VacancyPublicationGrant[]
+  vacancyPublicationBalance UserVacancyPublicationBalance?
+  vacancyPublicationUsages VacancyPublicationUsage[]
+  telegramAccounts TelegramAccount[]
+  resumeContactUnlocks ResumeContactUnlock[] @relation("ResumeContactUnlockBuyer")
+  verifiedContacts VerifiedContact[]
+  contactDisclosureConsents ContactDisclosureConsent[]
+  contactAccessEntitlements ContactAccessEntitlement[] @relation("ContactAccessBuyer")
+  contactDisputesOpened ContactDispute[] @relation("ContactDisputeBuyer")
+  contactDisputesReceived ContactDispute[] @relation("ContactDisputeAuthor")
+  contactDisputesResolved ContactDispute[] @relation("ContactDisputeResolver")
+  jobApplications JobApplication[] @relation("JobApplicationApplicant")
+  notifications   Notification[]
+  notificationPreference NotificationPreference?
+  savedSearches   SavedSearch[]
+  promotionProductsUpdated PromotionProduct[] @relation("PromotionProductUpdatedBy")
+  promotionPurchases PromotionPurchase[]
+  adReportsMade   AdReport[] @relation("AdReportReporter")
+  adReportsReceived AdReport[] @relation("AdReportReportedUser")
+  adReportsModerated AdReport[] @relation("AdReportModerator")
+  adReportHistory AdReportStatusHistory[] @relation("AdReportHistoryModerator")
+  trustBadgeAssignments UserTrustBadgeAssignment[] @relation("UserTrustBadgeUser")
+  trustBadgesAssigned UserTrustBadgeAssignment[] @relation("UserTrustBadgeAssignedBy")
+  trustBadgeHistory UserTrustBadgeHistory[] @relation("UserTrustBadgeHistoryUser")
+  trustBadgeHistoryModerated UserTrustBadgeHistory[] @relation("UserTrustBadgeHistoryModerator")
 
   @@index([status])
   @@index([role])
@@ -137,23 +390,139 @@ model User {
   @@map("users")
 }
 
-model UserProfile {
-  id            String    @id @default(cuid())
-  userId        String    @unique @map("user_id")
-  city          String?
-  districtText  String?   @map("district_text")
-  about         String?
-  avatarUrl     String?   @map("avatar_url")
-  deletedAt     DateTime? @map("deleted_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+model Referral {
+  id          String    @id @default(cuid())
+  referrerId  String    @map("referrer_id")
+  referredId  String    @unique @map("referred_id")
+  rewardedAt  DateTime? @map("rewarded_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referrer    User      @relation("ReferralReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred    User      @relation("ReferralReferred", fields: [referredId], references: [id], onDelete: Cascade)
+  grant       VacancyPublicationGrant?
+
+  @@index([referrerId, createdAt])
+  @@index([rewardedAt])
+  @@map("referrals")
+}
+
+model VacancyPublicationGrant {
+  id                String                         @id @default(cuid())
+  userId            String                         @map("user_id")
+  source            VacancyPublicationGrantSource  @default(REFERRAL)
+  sourceReferralId  String?                        @unique @map("source_referral_id")
+  publications      Int                            @default(1)
+  createdAt         DateTime                       @default(now()) @map("created_at")
+
+  user              User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceReferral    Referral?                      @relation(fields: [sourceReferralId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([source])
+  @@map("vacancy_publication_grants")
+}
+
+model UserVacancyPublicationBalance {
+  userId       String   @id @map("user_id")
+  purchased    Int      @default(0)
+  bonus        Int      @default(0)
+  used         Int      @default(0)
+  remaining    Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_vacancy_publication_balances")
+}
+
+model VacancyPublicationUsage {
+  id          String                         @id @default(cuid())
+  userId      String                         @map("user_id")
+  adId        String                         @map("ad_id")
+  source      VacancyPublicationUsageSource  @default(PACKAGE)
+  returnedAt  DateTime?                      @map("returned_at")
+  createdAt   DateTime                       @default(now()) @map("created_at")
+  updatedAt   DateTime                       @updatedAt @map("updated_at")
+
+  user        User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad          Ad                             @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, returnedAt])
+  @@index([adId, createdAt])
+  @@map("vacancy_publication_usages")
+}
+
+model UserProfile {
+  id                         String      @id @default(cuid())
+  userId                     String      @unique @map("user_id")
+  profileType                ProfileType @default(PERSON) @map("profile_type")
+  companyName                String?     @map("company_name")
+  city                       String?
+  districtText               String?     @map("district_text")
+  about                      String?
+  avatarUrl                  String?     @map("avatar_url")
+  phone                      String?
+  email                      String?
+  website                    String?
+  maxContact                 String?     @map("max_contact")
+  specialization             String?
+  experience                 String?
+  companyInfo                String?     @map("company_info")
+  registrationDetails        String?     @map("registration_details")
+  showPhone                  Boolean     @default(false) @map("show_phone")
+  showEmail                  Boolean     @default(false) @map("show_email")
+  showWebsite                Boolean     @default(true) @map("show_website")
+  showMaxContact             Boolean     @default(true) @map("show_max_contact")
+  allowResumePublicProfile   Boolean     @default(true) @map("allow_resume_public_profile")
+  deletedAt                  DateTime?   @map("deleted_at")
+  createdAt                  DateTime    @default(now()) @map("created_at")
+  updatedAt                  DateTime    @updatedAt @map("updated_at")
+
+  user                       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([city])
   @@index([districtText])
+  @@index([profileType])
   @@index([deletedAt])
   @@map("user_profiles")
+}
+
+model UserTrustBadgeAssignment {
+  userId       String         @map("user_id")
+  badge        UserTrustBadge
+  assignedById String?        @map("assigned_by_id")
+  reason       String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  user         User           @relation("UserTrustBadgeUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User?          @relation("UserTrustBadgeAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, badge])
+  @@index([badge])
+  @@index([assignedById])
+  @@map("user_trust_badge_assignments")
+}
+
+model UserTrustBadgeHistory {
+  id          String         @id @default(cuid())
+  userId      String         @map("user_id")
+  badge       UserTrustBadge
+  action      String
+  moderatorId String?        @map("moderator_id")
+  reason      String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  user        User           @relation("UserTrustBadgeHistoryUser", fields: [userId], references: [id], onDelete: Cascade)
+  moderator   User?          @relation("UserTrustBadgeHistoryModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([badge, createdAt])
+  @@index([moderatorId, createdAt])
+  @@map("user_trust_badge_history")
 }
 
 model Ad {
@@ -185,6 +554,7 @@ model Ad {
   vacancyDetails     VacancyDetails?
   resumeDetails      ResumeDetails?
   equipmentDetails   EquipmentDetails?
+  productDetails     ProductDetails?
   photos             AdPhoto[]
   contacts           AdContact[]
   requirements       AdRequirement[]
@@ -192,8 +562,27 @@ model Ad {
   benefits           AdBenefit[]
   favorites          Favorite[]
   reviews            Review[]
+  payments           AdPayment[]
+  resumeContactUnlocks ResumeContactUnlock[] @relation("ResumeContactUnlockResume")
+  contactAccessEntitlements ContactAccessEntitlement[]
+  contactDisputes ContactDispute[]
+  vacancyApplications JobApplication[] @relation("JobApplicationVacancy")
+  resumeApplications JobApplication[] @relation("JobApplicationResume")
+  vacancyPublicationUsages VacancyPublicationUsage[]
+  revisions          AdRevision[]
   moderationLogs     ModerationLog[]
   channelPublishLogs ChannelPublishLog[]
+  externalPublications ExternalPublication[]
+  savedSearchMatches SavedSearchMatch[]
+  promotionPurchases PromotionPurchase[]
+  metricDaily       AdMetricDaily[]
+  metricUniqueViews AdMetricUniqueView[]
+  reports           AdReport[]
+  boostedAt          DateTime? @map("boosted_at")
+  promotionUrgentUntil DateTime? @map("promotion_urgent_until")
+  promotionPinnedUntil DateTime? @map("promotion_pinned_until")
+  promotionHighlightedUntil DateTime? @map("promotion_highlighted_until")
+  promotionRecommendedUntil DateTime? @map("promotion_recommended_until")
 
   @@index([ownerId])
   @@index([ownerId, status, updatedAt])
@@ -205,8 +594,39 @@ model Ad {
   @@index([categoryText])
   @@index([isTest])
   @@index([publishedAt])
+  @@index([promotionPinnedUntil])
+  @@index([promotionRecommendedUntil])
+  @@index([promotionUrgentUntil])
+  @@index([boostedAt])
   @@index([deletedAt])
   @@map("ads")
+}
+
+model AdRevision {
+  id              String   @id @default(cuid())
+  adId            String   @map("ad_id")
+  version         Int
+  status          String   @default("DRAFT")
+  dataJson        String   @map("data_json")
+  mediaJson       String?  @map("media_json")
+  createdBy       String   @map("created_by")
+  paymentId       String?  @unique @map("payment_id")
+  submittedAt     DateTime? @map("submitted_at")
+  approvedAt      DateTime? @map("approved_at")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?  @map("rejection_reason")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  ad              Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  creator         User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([adId, version])
+  @@index([adId, status, createdAt])
+  @@index([createdBy, status, createdAt])
+  @@index([paymentId])
+  @@map("ad_revisions")
 }
 
 model VacancyDetails {
@@ -224,6 +644,10 @@ model VacancyDetails {
   schedule            String?
   experience          String?
   education           String?
+  paymentFormat       String?         @map("payment_format")
+  providesAccommodation Boolean        @default(false) @map("provides_accommodation")
+  providesMeals       Boolean         @default(false) @map("provides_meals")
+  projectDuration     String?         @map("project_duration")
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
@@ -240,24 +664,38 @@ model ResumeDetails {
   id               String          @id @default(cuid())
   adId             String          @unique @map("ad_id")
   desiredPosition  String?         @map("desired_position")
+  profession       String?
+  specialization   String?
   experienceYears  Int?            @map("experience_years")
+  experienceText   String?         @map("experience_text")
   employmentType   EmploymentType? @map("employment_type")
   workFormat       WorkFormat?     @map("work_format")
+  desiredSchedule  String?         @map("desired_schedule")
   expectedSalary   Float?          @map("expected_salary")
   salaryCurrency   String          @default("RUB") @map("salary_currency")
   skillsJson       String?         @map("skills_json")
   education        String?
   availability     String?
+  travelReady      Boolean         @default(false) @map("travel_ready")
+  siteAccommodationReady Boolean   @default(false) @map("site_accommodation_ready")
   portfolioUrl     String?         @map("portfolio_url")
+  verifiedContactId String?        @map("verified_contact_id")
+  contactConsentId  String?        @map("contact_consent_id")
+  contactAvailabilityStatus String @default("UNVERIFIED_LEGACY") @map("contact_availability_status")
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
 
   ad               Ad              @relation(fields: [adId], references: [id], onDelete: Cascade)
+  verifiedContact  VerifiedContact? @relation(fields: [verifiedContactId], references: [id], onDelete: SetNull)
+  contactConsent   ContactDisclosureConsent? @relation(fields: [contactConsentId], references: [id], onDelete: SetNull)
 
   @@index([desiredPosition])
   @@index([experienceYears])
   @@index([employmentType])
   @@index([workFormat])
+  @@index([verifiedContactId])
+  @@index([contactConsentId])
+  @@index([contactAvailabilityStatus])
   @@map("resume_details")
 }
 
@@ -265,14 +703,20 @@ model EquipmentDetails {
   id              String             @id @default(cuid())
   adId            String             @unique @map("ad_id")
   categoryText    String?            @map("category_text")
+  dealType        ListingDealType?   @map("deal_type")
   condition       EquipmentCondition?
   brand           String?
   model           String?
   productionYear  Int?               @map("production_year")
+  hourlyPrice     Float?             @map("hourly_price")
+  shiftPrice      Float?             @map("shift_price")
+  dailyPrice      Float?             @map("daily_price")
   rentalPrice     Float?             @map("rental_price")
   salePrice       Float?             @map("sale_price")
   depositAmount   Float?             @map("deposit_amount")
   currency        String             @default("RUB")
+  operatorIncluded Boolean            @default(false) @map("operator_included")
+  deliveryAvailable Boolean           @default(false) @map("delivery_available")
   availability    String?
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
@@ -284,6 +728,28 @@ model EquipmentDetails {
   @@index([brand])
   @@index([model])
   @@map("equipment_details")
+}
+
+model ProductDetails {
+  id                String            @id @default(cuid())
+  adId              String            @unique @map("ad_id")
+  manufacturer      String?
+  model             String?
+  condition         ProductCondition?
+  quantity          Float?
+  unit              String?
+  saleType          ProductSaleType?  @map("sale_type")
+  deliveryAvailable Boolean           @default(false) @map("delivery_available")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  ad                Ad                @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([manufacturer])
+  @@index([model])
+  @@index([condition])
+  @@index([saleType])
+  @@map("product_details")
 }
 
 model AdPhoto {
@@ -434,6 +900,429 @@ model Favorite {
   @@map("favorites")
 }
 
+model AdPayment {
+  id                 String        @id @default(cuid())
+  adId               String        @map("ad_id")
+  yooKassaPaymentId  String        @unique @map("yookassa_payment_id")
+  yooKassaRefundId   String?       @unique @map("yookassa_refund_id")
+  idempotenceKey     String        @unique @map("idempotence_key")
+  status             PaymentStatus @default(PENDING)
+  amountValue        String        @map("amount_value")
+  currency           String        @default("RUB")
+  confirmationUrl    String?       @map("confirmation_url")
+  paidAt             DateTime?     @map("paid_at")
+  canceledAt         DateTime?     @map("canceled_at")
+  refundedAt         DateTime?     @map("refunded_at")
+  rawPayloadJson     String?       @map("raw_payload_json")
+  refundPayloadJson  String?       @map("refund_payload_json")
+  purpose            String        @default("VACANCY_PUBLICATION")
+  purposeCode        String        @default("VACANCY_PACKAGE") @map("purpose_code")
+  purposeComponentsJson String?    @map("purpose_components_json")
+  packagePublications Int          @default(0) @map("package_publications")
+  includesMediaHighlight Boolean   @default(false) @map("includes_media_highlight")
+  appliedAt          DateTime?     @map("applied_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  ad                 Ad            @relation(fields: [adId], references: [id], onDelete: Cascade)
+  resumeContactUnlock ResumeContactUnlock?
+  contactAccessEntitlement ContactAccessEntitlement?
+  promotionPurchase PromotionPurchase?
+
+  @@index([adId, createdAt])
+  @@index([adId, status])
+  @@index([status])
+  @@map("ad_payments")
+}
+
+model ResumeContactUnlock {
+  id          String        @id @default(cuid())
+  buyerUserId String       @map("buyer_user_id")
+  resumeAdId  String       @map("resume_ad_id")
+  paymentId   String?      @unique @map("payment_id")
+  amount      String       @default("20.00")
+  currency    String       @default("RUB")
+  status      PaymentStatus @default(PENDING)
+  unlockedAt  DateTime?    @map("unlocked_at")
+  refundedAt  DateTime?    @map("refunded_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  buyer      User          @relation("ResumeContactUnlockBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  resumeAd   Ad            @relation("ResumeContactUnlockResume", fields: [resumeAdId], references: [id], onDelete: Cascade)
+  payment    AdPayment?    @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  verifiedContact VerifiedContact? @relation(fields: [verifiedContactId], references: [id], onDelete: SetNull)
+  consent ContactDisclosureConsent? @relation(fields: [consentId], references: [id], onDelete: SetNull)
+  entitlement ContactAccessEntitlement?
+
+  verifiedContactId String? @map("verified_contact_id")
+  consentId         String? @map("consent_id")
+  accessMode        ContactAccessMode @default(MAX_VERIFIED_CONNECTION) @map("access_mode")
+
+  @@unique([buyerUserId, resumeAdId])
+  @@unique([buyerUserId, resumeAdId, verifiedContactId, accessMode])
+  @@index([buyerUserId, status, createdAt])
+  @@index([resumeAdId, status])
+  @@index([paymentId])
+  @@index([verifiedContactId])
+  @@index([consentId])
+  @@map("resume_contact_unlocks")
+}
+
+model VerifiedContact {
+  id                         String              @id @default(cuid())
+  userId                     String              @map("user_id")
+  type                       VerifiedContactType
+  normalizedValueEncrypted   String              @map("normalized_value_encrypted")
+  maskedValue                String              @map("masked_value")
+  source                     ContactSource
+  maxUserId                  String?             @map("max_user_id")
+  verifiedAt                 DateTime?           @map("verified_at")
+  verificationAuthDate       DateTime?           @map("verification_auth_date")
+  verificationHashFingerprint String?            @map("verification_hash_fingerprint")
+  expiresAt                  DateTime?           @map("expires_at")
+  revokedAt                  DateTime?           @map("revoked_at")
+  lastConfirmedAt            DateTime?           @map("last_confirmed_at")
+  status                     ContactStatus       @default(PENDING)
+  createdAt                  DateTime            @default(now()) @map("created_at")
+  updatedAt                  DateTime            @updatedAt @map("updated_at")
+
+  user                       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consents                   ContactDisclosureConsent[]
+  resumeDetails              ResumeDetails[]
+  resumeContactUnlocks       ResumeContactUnlock[]
+  entitlements               ContactAccessEntitlement[]
+
+  @@index([userId, status])
+  @@index([maxUserId])
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+  @@map("verified_contacts")
+}
+
+model ContactDisclosureConsent {
+  id                String            @id @default(cuid())
+  userId            String            @map("user_id")
+  verifiedContactId String            @map("verified_contact_id")
+  consentType       ContactAccessMode @map("consent_type")
+  documentVersion   String            @map("document_version")
+  acceptedAt        DateTime          @map("accepted_at")
+  revokedAt         DateTime?         @map("revoked_at")
+  ipHash            String?           @map("ip_hash")
+  sessionMetadataJson String?         @map("session_metadata_json")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifiedContact   VerifiedContact   @relation(fields: [verifiedContactId], references: [id], onDelete: Cascade)
+  resumeDetails     ResumeDetails[]
+  resumeContactUnlocks ResumeContactUnlock[]
+  entitlements      ContactAccessEntitlement[]
+
+  @@index([userId, consentType, acceptedAt])
+  @@index([verifiedContactId, consentType, revokedAt])
+  @@map("contact_disclosure_consents")
+}
+
+model ContactAccessEntitlement {
+  id                String              @id @default(cuid())
+  buyerUserId       String              @map("buyer_user_id")
+  resumeAdId        String              @map("resume_ad_id")
+  authorUserId      String              @map("author_user_id")
+  verifiedContactId String              @map("verified_contact_id")
+  consentId         String              @map("consent_id")
+  paymentId         String?             @unique @map("payment_id")
+  legacyUnlockId    String?             @unique @map("legacy_unlock_id")
+  accessMode        ContactAccessMode   @default(MAX_VERIFIED_CONNECTION) @map("access_mode")
+  status            ContactAccessStatus @default(PENDING_PAYMENT)
+  grantedAt         DateTime?           @map("granted_at")
+  expiresAt         DateTime?           @map("expires_at")
+  revokedAt         DateTime?           @map("revoked_at")
+  disputeId         String?             @unique @map("dispute_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  buyer             User                @relation("ContactAccessBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  resumeAd          Ad                  @relation(fields: [resumeAdId], references: [id], onDelete: Cascade)
+  verifiedContact   VerifiedContact     @relation(fields: [verifiedContactId], references: [id], onDelete: Restrict)
+  consent           ContactDisclosureConsent @relation(fields: [consentId], references: [id], onDelete: Restrict)
+  payment           AdPayment?          @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  legacyUnlock      ResumeContactUnlock? @relation(fields: [legacyUnlockId], references: [id], onDelete: SetNull)
+  dispute           ContactDispute?     @relation("EntitlementDispute")
+
+  @@unique([buyerUserId, resumeAdId, verifiedContactId, accessMode, status])
+  @@index([buyerUserId, status, createdAt])
+  @@index([resumeAdId, status])
+  @@index([verifiedContactId, status])
+  @@index([authorUserId, status])
+  @@map("contact_access_entitlements")
+}
+
+model ContactDispute {
+  id                      String               @id @default(cuid())
+  entitlementId           String               @unique @map("entitlement_id")
+  buyerUserId             String               @map("buyer_user_id")
+  authorUserId            String               @map("author_user_id")
+  resumeAdId              String               @map("resume_ad_id")
+  reason                  ContactDisputeReason
+  comment                 String?
+  status                  ContactDisputeStatus @default(OPEN)
+  openedAt                DateTime             @default(now()) @map("opened_at")
+  evidenceJson            String?              @map("evidence_json")
+  authorReverifyDeadline  DateTime?            @map("author_reverify_deadline")
+  resolvedBy              String?              @map("resolved_by")
+  resolution              String?
+  refundPaymentId         String?              @map("refund_payment_id")
+  resolvedAt              DateTime?            @map("resolved_at")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  entitlement             ContactAccessEntitlement @relation("EntitlementDispute", fields: [entitlementId], references: [id], onDelete: Cascade)
+  buyer                   User                 @relation("ContactDisputeBuyer", fields: [buyerUserId], references: [id], onDelete: Cascade)
+  author                  User                 @relation("ContactDisputeAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  resumeAd                Ad                   @relation(fields: [resumeAdId], references: [id], onDelete: Cascade)
+  resolver                User?                @relation("ContactDisputeResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([status, openedAt])
+  @@index([buyerUserId, status])
+  @@index([authorUserId, status])
+  @@index([resumeAdId, status])
+  @@map("contact_disputes")
+}
+
+model JobApplication {
+  id                  String               @id @default(cuid())
+  vacancyAdId          String               @map("vacancy_ad_id")
+  applicantUserId      String               @map("applicant_user_id")
+  resumeAdId           String?              @map("resume_ad_id")
+  coverMessage         String?              @map("cover_message")
+  contactSnapshotJson  String               @map("contact_snapshot_json")
+  resumeSnapshotJson   String?              @map("resume_snapshot_json")
+  status               JobApplicationStatus @default(NEW)
+  viewedAt             DateTime?            @map("viewed_at")
+  contactedAt          DateTime?            @map("contacted_at")
+  decidedAt            DateTime?            @map("decided_at")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  vacancyAd            Ad                   @relation("JobApplicationVacancy", fields: [vacancyAdId], references: [id], onDelete: Cascade)
+  applicant            User                 @relation("JobApplicationApplicant", fields: [applicantUserId], references: [id], onDelete: Cascade)
+  resumeAd             Ad?                  @relation("JobApplicationResume", fields: [resumeAdId], references: [id], onDelete: SetNull)
+
+  @@index([vacancyAdId, status, createdAt])
+  @@index([applicantUserId, status, createdAt])
+  @@index([resumeAdId])
+  @@unique([vacancyAdId, applicantUserId, status])
+  @@map("job_applications")
+}
+
+model PromotionProduct {
+  id                    String               @id @default(cuid())
+  type                  PromotionProductType @unique
+  enabled               Boolean              @default(false)
+  priceValue            String?              @map("price_value")
+  currency              String               @default("RUB")
+  durationHours         Int?                 @map("duration_hours")
+  applicableAdTypesJson String               @default("[]") @map("applicable_ad_types_json")
+  configurationJson     String?              @map("configuration_json")
+  channelBehaviorJson   String?              @map("channel_behavior_json")
+  updatedById           String?              @map("updated_by_id")
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
+
+  updatedBy             User?                @relation("PromotionProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  purchases             PromotionPurchase[]
+
+  @@index([enabled, type])
+  @@index([updatedById])
+  @@map("promotion_products")
+}
+
+model PromotionPurchase {
+  id                          String               @id @default(cuid())
+  userId                      String               @map("user_id")
+  adId                        String               @map("ad_id")
+  productId                   String               @map("product_id")
+  productType                 PromotionProductType @map("product_type")
+  paymentId                   String?              @unique @map("payment_id")
+  amountValue                 String               @map("amount_value")
+  currency                    String               @default("RUB")
+  status                      PaymentStatus        @default(PENDING)
+  startsAt                    DateTime?            @map("starts_at")
+  endsAt                      DateTime?            @map("ends_at")
+  lastBumpedAt                DateTime?            @map("last_bumped_at")
+  configurationSnapshotJson   String?              @map("configuration_snapshot_json")
+  channelBehaviorSnapshotJson String?              @map("channel_behavior_snapshot_json")
+  createdAt                   DateTime             @default(now()) @map("created_at")
+  updatedAt                   DateTime             @updatedAt @map("updated_at")
+
+  user                        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad                          Ad                   @relation(fields: [adId], references: [id], onDelete: Cascade)
+  product                     PromotionProduct     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  payment                     AdPayment?           @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt])
+  @@index([adId, status, endsAt])
+  @@index([productType, status, endsAt])
+  @@index([paymentId])
+  @@map("promotion_purchases")
+}
+
+model AdMetricDaily {
+  id                 String   @id @default(cuid())
+  adId               String   @map("ad_id")
+  date               DateTime
+  views              Int      @default(0)
+  uniqueViews        Int      @default(0) @map("unique_views")
+  favoriteAdds       Int      @default(0) @map("favorite_adds")
+  favoriteRemoves    Int      @default(0) @map("favorite_removes")
+  contactOpens       Int      @default(0) @map("contact_opens")
+  phoneClicks        Int      @default(0) @map("phone_clicks")
+  emailClicks        Int      @default(0) @map("email_clicks")
+  maxClicks          Int      @default(0) @map("max_clicks")
+  websiteClicks      Int      @default(0) @map("website_clicks")
+  applications       Int      @default(0)
+  contactUnlocks     Int      @default(0) @map("contact_unlocks")
+  promotionPurchases Int      @default(0) @map("promotion_purchases")
+  internalEvents     Int      @default(0) @map("internal_events")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  ad                 Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([adId, date])
+  @@index([date])
+  @@index([adId, date])
+  @@map("ad_metric_daily")
+}
+
+model AdMetricUniqueView {
+  id          String   @id @default(cuid())
+  adId        String   @map("ad_id")
+  date        DateTime
+  visitorHash String   @map("visitor_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ad          Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([adId, date, visitorHash])
+  @@index([date])
+  @@map("ad_metric_unique_views")
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  type           String
+  title          String
+  body           String
+  payloadJson    String?   @map("payload_json")
+  idempotencyKey String    @unique @map("idempotency_key")
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries     NotificationDelivery[]
+
+  @@index([userId, readAt, createdAt])
+  @@index([userId, type, createdAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(cuid())
+  notificationId    String                     @map("notification_id")
+  channel           NotificationDeliveryChannel
+  status            NotificationDeliveryStatus @default(PENDING)
+  attempts          Int                        @default(0)
+  sentAt            DateTime?                  @map("sent_at")
+  lastError         String?                    @map("last_error")
+  externalMessageId String?                    @map("external_message_id")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  notification      Notification               @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([channel, status, createdAt])
+  @@map("notification_deliveries")
+}
+
+model NotificationPreference {
+  userId               String   @id @map("user_id")
+  adStatusEnabled      Boolean  @default(true) @map("ad_status_enabled")
+  applicationsEnabled  Boolean  @default(true) @map("applications_enabled")
+  savedSearchesEnabled Boolean  @default(true) @map("saved_searches_enabled")
+  paymentsEnabled      Boolean  @default(true) @map("payments_enabled")
+  marketingEnabled     Boolean  @default(false) @map("marketing_enabled")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model SavedSearch {
+  id                   String               @id @default(cuid())
+  userId               String               @map("user_id")
+  name                 String
+  adType               AdType               @map("ad_type")
+  query                String
+  canonicalFiltersJson String               @map("canonical_filters_json")
+  notificationFrequency SavedSearchFrequency @default(IMMEDIATE) @map("notification_frequency")
+  enabled              Boolean              @default(true)
+  lastMatchedAt        DateTime?            @map("last_matched_at")
+  deletedAt            DateTime?            @map("deleted_at")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matches              SavedSearchMatch[]
+
+  @@index([userId, enabled, createdAt])
+  @@index([adType, enabled, notificationFrequency])
+  @@index([deletedAt])
+  @@map("saved_searches")
+}
+
+model SavedSearchMatch {
+  savedSearchId String      @map("saved_search_id")
+  adId          String      @map("ad_id")
+  notifiedAt    DateTime?   @map("notified_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  savedSearch   SavedSearch @relation(fields: [savedSearchId], references: [id], onDelete: Cascade)
+  ad            Ad          @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@id([savedSearchId, adId])
+  @@index([adId])
+  @@index([savedSearchId, notifiedAt])
+  @@map("saved_search_matches")
+}
+
+model OutboxJob {
+  id              String          @id @default(cuid())
+  type            String
+  status          OutboxJobStatus @default(PENDING)
+  payloadJson     String          @map("payload_json")
+  idempotencyKey  String          @unique @map("idempotency_key")
+  attempts        Int             @default(0)
+  maxAttempts     Int             @default(5) @map("max_attempts")
+  nextAttemptAt   DateTime        @default(now()) @map("next_attempt_at")
+  lockedAt        DateTime?       @map("locked_at")
+  lockedBy        String?         @map("locked_by")
+  completedAt     DateTime?       @map("completed_at")
+  lastError       String?         @map("last_error")
+  resultJson      String?         @map("result_json")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([status, nextAttemptAt])
+  @@index([status, lockedAt])
+  @@index([type, status])
+  @@map("outbox_jobs")
+}
+
 model Review {
   id               String       @id @default(cuid())
   authorId         String       @map("author_id")
@@ -485,6 +1374,57 @@ model ModerationLog {
   @@map("moderation_logs")
 }
 
+model AdReport {
+  id              String         @id @default(cuid())
+  reporterUserId  String         @map("reporter_user_id")
+  adId            String         @map("ad_id")
+  reportedUserId  String         @map("reported_user_id")
+  reason          AdReportReason
+  comment         String?
+  evidenceJson    String?        @map("evidence_json")
+  status          AdReportStatus @default(OPEN)
+  moderatorId     String?        @map("moderator_id")
+  resolution      String?
+  resolvedAt      DateTime?      @map("resolved_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  reporter        User           @relation("AdReportReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  ad              Ad             @relation(fields: [adId], references: [id], onDelete: Cascade)
+  reportedUser    User           @relation("AdReportReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  moderator       User?          @relation("AdReportModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+  history         AdReportStatusHistory[]
+
+  @@unique([reporterUserId, adId, status])
+  @@index([status, createdAt])
+  @@index([adId, status])
+  @@index([reportedUserId, status])
+  @@index([moderatorId])
+  @@map("ad_reports")
+}
+
+model AdReportStatusHistory {
+  id             String          @id @default(cuid())
+  reportId       String          @map("report_id")
+  moderatorId    String?         @map("moderator_id")
+  action         String
+  statusFrom     AdReportStatus? @map("status_from")
+  statusTo       AdReportStatus  @map("status_to")
+  adStatusFrom   AdStatus?       @map("ad_status_from")
+  adStatusTo     AdStatus?       @map("ad_status_to")
+  userStatusFrom UserStatus?     @map("user_status_from")
+  userStatusTo   UserStatus?     @map("user_status_to")
+  reason         String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  report         AdReport        @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  moderator      User?           @relation("AdReportHistoryModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([reportId, createdAt])
+  @@index([moderatorId, createdAt])
+  @@map("ad_report_status_history")
+}
+
 model ChannelPublishLog {
   id             String               @id @default(cuid())
   adId           String               @map("ad_id")
@@ -516,4 +1456,128 @@ model ChannelPublishLog {
   @@index([maxChatId])
   @@index([publishedAt])
   @@map("channel_publish_logs")
+}
+
+model TelegramAccount {
+  id                String                @id @default(cuid())
+  userId            String?               @map("user_id")
+  telegramUserId    String                @unique @map("telegram_user_id")
+  username          String?
+  firstName         String?               @map("first_name")
+  lastName          String?               @map("last_name")
+  languageCode      String?               @map("language_code")
+  status            TelegramAccountStatus @default(ACTIVE)
+  linkedAt          DateTime?             @map("linked_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  user              User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mediaGroupBuffers TelegramMediaGroupBuffer[]
+  linkTokens        TelegramLinkToken[]
+
+  @@index([userId])
+  @@index([username])
+  @@index([status])
+  @@map("telegram_accounts")
+}
+
+model TelegramTarget {
+  id                      String               @id @default(cuid())
+  username                String               @unique
+  chatId                  String?              @unique @map("chat_id")
+  messageThreadId         String?              @map("message_thread_id")
+  title                   String?
+  type                    TelegramTargetType
+  status                  TelegramTargetStatus @default(DISABLED)
+  enabled                 Boolean              @default(false)
+  testTarget              Boolean              @default(false) @map("test_target")
+  publishEnabled          Boolean              @default(false) @map("publish_enabled")
+  editEnabled             Boolean              @default(false) @map("edit_enabled")
+  deleteEnabled           Boolean              @default(false) @map("delete_enabled")
+  botIsMember             Boolean              @default(false) @map("bot_is_member")
+  botIsAdmin              Boolean              @default(false) @map("bot_is_admin")
+  canPostMessages         Boolean              @default(false) @map("can_post_messages")
+  canEditMessages         Boolean              @default(false) @map("can_edit_messages")
+  canDeleteMessages       Boolean              @default(false) @map("can_delete_messages")
+  canSendMediaMessages    Boolean              @default(false) @map("can_send_media_messages")
+  canManageTopics         Boolean              @default(false) @map("can_manage_topics")
+  lastPermissionCheckAt   DateTime?            @map("last_permission_check_at")
+  lastSuccessfulPublishAt DateTime?            @map("last_successful_publish_at")
+  lastError               String?              @map("last_error")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+
+  externalPublications    ExternalPublication[]
+
+  @@index([type])
+  @@index([enabled])
+  @@index([testTarget])
+  @@index([status])
+  @@map("telegram_targets")
+}
+
+model ExternalPublication {
+  id                   String                            @id @default(cuid())
+  adId                 String                            @map("ad_id")
+  platform             ExternalPublicationPlatform
+  targetId             String?                           @map("target_id")
+  publicationVersion   Int                               @default(1) @map("publication_version")
+  externalChatId       String?                           @map("external_chat_id")
+  externalMessageId    String?                           @map("external_message_id")
+  externalMediaGroupId String?                           @map("external_media_group_id")
+  externalUrl          String?                           @map("external_url")
+  sourcePlatform       ExternalPublicationSourcePlatform @default(RABST24) @map("source_platform")
+  correlationId        String                            @map("correlation_id")
+  status               ExternalPublicationStatus         @default(PENDING)
+  lastError            String?                           @map("last_error")
+  publishedAt          DateTime?                         @map("published_at")
+  editedAt             DateTime?                         @map("edited_at")
+  deletedAt            DateTime?                         @map("deleted_at")
+  createdAt            DateTime                          @default(now()) @map("created_at")
+  updatedAt            DateTime                          @updatedAt @map("updated_at")
+
+  ad                   Ad                                @relation(fields: [adId], references: [id], onDelete: Cascade)
+  telegramTarget       TelegramTarget?                   @relation(fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@unique([adId, platform, targetId, publicationVersion])
+  @@unique([platform, externalChatId, externalMessageId])
+  @@index([adId, platform, status])
+  @@index([targetId, status])
+  @@index([correlationId])
+  @@map("external_publications")
+}
+
+model TelegramMediaGroupBuffer {
+  id              String                         @id @default(cuid())
+  telegramUserId  String                         @map("telegram_user_id")
+  mediaGroupId    String                         @map("media_group_id")
+  payloadJson     String                         @map("payload_json")
+  firstReceivedAt DateTime                       @default(now()) @map("first_received_at")
+  finalizeAt      DateTime                       @map("finalize_at")
+  status          TelegramMediaGroupBufferStatus @default(COLLECTING)
+  createdAt       DateTime                       @default(now()) @map("created_at")
+  updatedAt       DateTime                       @updatedAt @map("updated_at")
+
+  telegramAccount TelegramAccount                @relation(fields: [telegramUserId], references: [telegramUserId], onDelete: Cascade)
+
+  @@unique([telegramUserId, mediaGroupId])
+  @@index([status, finalizeAt])
+  @@map("telegram_media_group_buffers")
+}
+
+model TelegramLinkToken {
+  id                String                  @id @default(cuid())
+  telegramAccountId String                  @map("telegram_account_id")
+  codeHash          String                  @unique @map("code_hash")
+  status            TelegramLinkTokenStatus @default(PENDING)
+  expiresAt         DateTime                @map("expires_at")
+  consumedAt        DateTime?               @map("consumed_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  telegramAccount   TelegramAccount         @relation(fields: [telegramAccountId], references: [id], onDelete: Cascade)
+
+  @@index([telegramAccountId, status])
+  @@index([status, expiresAt])
+  @@map("telegram_link_tokens")
 }
