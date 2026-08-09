@@ -16,6 +16,7 @@ import { ModerationPage } from '../pages/ModerationPage.js';
 import { NotificationsPage } from '../pages/NotificationsPage.js';
 import { NotFoundPage } from '../pages/NotFoundPage.js';
 import { ProfilePage } from '../pages/ProfilePage.js';
+import { ProfilePaymentsPage } from '../pages/ProfilePaymentsPage.js';
 import { PublicProfilePage } from '../pages/PublicProfilePage.js';
 import { ResumesPage } from '../pages/ResumesPage.js';
 import { ReviewsPage } from '../pages/ReviewsPage.js';
@@ -110,6 +111,10 @@ export const router = createBrowserRouter([
       {
         path: 'profile',
         element: <ProfilePage />
+      },
+      {
+        path: 'profile/payments',
+        element: <ProfilePaymentsPage />
       },
       {
         path: 'users/:userId',

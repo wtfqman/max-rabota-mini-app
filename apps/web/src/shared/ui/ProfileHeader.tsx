@@ -1,4 +1,5 @@
-﻿import { UserRound } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { UserRound } from 'lucide-react';
 import { StatChip } from './StatChip.js';
 
 interface ProfileHeaderProps {
@@ -6,12 +7,13 @@ interface ProfileHeaderProps {
   subtitle: string;
   avatarUrl?: string;
   stats: Array<{ label: string; value: string }>;
+  action?: ReactNode;
 }
 
-export function ProfileHeader({ name, subtitle, avatarUrl, stats }: ProfileHeaderProps) {
+export function ProfileHeader({ name, subtitle, avatarUrl, stats, action }: ProfileHeaderProps) {
   return (
-    <section className="app-surface app-topline rounded-panel p-3 text-center app-fade-up">
-      <div className="flex items-center gap-3 text-left">
+    <section className="app-surface app-topline rounded-panel p-2.5 text-center app-fade-up">
+      <div className="flex items-center gap-2.5 text-left">
         {avatarUrl ? (
           <img src={avatarUrl} alt="" className="h-12 w-12 shrink-0 rounded-full border-2 border-accent-green object-cover p-0.5" />
         ) : (
@@ -25,6 +27,7 @@ export function ProfileHeader({ name, subtitle, avatarUrl, stats }: ProfileHeade
           <h1 className="truncate text-lg font-black leading-tight text-text-primary">{name}</h1>
           <p className="truncate text-xs font-semibold text-text-secondary">{subtitle}</p>
         </div>
+        {action ? <div className="ml-auto shrink-0">{action}</div> : null}
       </div>
       <div className="mt-2 grid grid-cols-3 gap-1.5">
         {stats.map((stat) => (
