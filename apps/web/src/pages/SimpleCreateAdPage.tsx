@@ -18,7 +18,6 @@ import {
   ExternalLink,
   FileUser,
   HardHat,
-  ImagePlus,
   Loader2,
   Package,
   Send,
@@ -344,9 +343,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
       nextErrors.money = copy.kind === 'vacancy' ? 'Укажите зарплату или диапазон.' : copy.moneyLabel === 'Цена' ? 'Укажите цену.' : 'Укажите зарплату.';
     }
 
-    if (copy.kind === 'resume' && !verifiedResumeContact) {
-      nextErrors.contact = 'Подтвердите контакт через MAX.';
-    } else if (copy.kind !== 'resume' && form.contact.trim().length < 3) {
+    if (!verifiedResumeContact && form.contact.trim().length < 3) {
       nextErrors.contact = 'Укажите контакт для связи.';
     }
 
@@ -811,7 +808,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
           <div className="rounded-panel border border-white/10 bg-surface-900/92 p-3">
             <p className="text-xs font-extrabold uppercase tracking-[0.08em] text-text-muted">Связаться</p>
             <p className="mt-1 text-base font-bold text-text-primary">
-              {kind === 'resume' ? (verifiedResumeContact?.maskedValue ?? 'Контакт ожидает подтверждения') : form.contact.trim()}
+              {kind === 'resume' ? (verifiedResumeContact?.maskedValue ?? form.contact.trim()) : form.contact.trim()}
             </p>
           </div>
         </SectionCard>
@@ -929,10 +926,18 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
           />
           {copy.kind === 'resume' ? (
             <div className="grid gap-3 rounded-panel border border-white/10 bg-surface-900/92 p-3">
+              <Input
+                label={requiredLabel('Контакты')}
+                placeholder={copy.contactPlaceholder}
+                value={form.contact}
+                error={errors.contact}
+                required={!verifiedResumeContact}
+                onChange={(event) => updateField('contact', event.target.value)}
+              />
               <div>
-                <p className="text-sm font-black text-text-primary">Контакт для связи</p>
+                <p className="text-sm font-black text-text-primary">Подтверждение MAX</p>
                 <p className="mt-1 text-xs leading-5 text-text-secondary">
-                  Подтверждение доказывает, что контакт был привязан к вашему MAX аккаунту. Номер не передаётся покупателю автоматически.
+                  Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.
                 </p>
               </div>
               {verifiedResumeContact ? (
@@ -1000,10 +1005,6 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
             onPhotosChange={updatePhotos}
             onBusyChange={setIsMediaBusy}
           />
-          <div className="flex items-center gap-2 rounded-panel border border-white/10 bg-white/[0.03] px-3 py-3 text-sm leading-5 text-text-secondary">
-            <ImagePlus size={18} className="shrink-0 text-accent-green" />
-            Первое фото будет обложкой. Можно добавить до 8 фото и одно видео MP4/MOV/WebM. Видео не заменяет фото и не сбрасывает уже добавленные файлы.
-          </div>
         </FormSection>
 
         {isVacancy ? (
@@ -1152,7 +1153,7 @@ function VacancyPaymentSummary({
       <div className="flex items-center justify-between gap-3 text-text-secondary">
         <span>{usesBalanceForVacancy ? 'Публикация из пакета' : `Пакет: ${plan.label}`}</span>
         <span className="shrink-0 font-black text-text-primary">
-          {usesBalanceForVacancy ? '1 С€С‚.' : formatRubAmount(plan.amountValue)}
+          {usesBalanceForVacancy ? '1 шт.' : formatRubAmount(plan.amountValue)}
         </span>
       </div>
       <div className="flex items-center justify-between gap-3 text-text-secondary">
