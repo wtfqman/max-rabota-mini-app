@@ -4,15 +4,28 @@ import { adListQuerySchema } from '@rabst24/shared';
 export const resumeListQuerySchema = adListQuerySchema.omit({
   type: true,
   schedule: true,
-  experience: true
+  experience: true,
+  employmentType: true,
+  workFormat: true,
+  availability: true,
+  dealType: true,
+  brand: true,
+  condition: true
 });
+
+const optionalExpectedSalarySchema = z.preprocess((value) => {
+  if (value === '' || value === null) {
+    return undefined;
+  }
+
+  return value;
+}, z.coerce.number().nonnegative().optional());
 
 export const createResumeSchema = z.object({
   name: z.string().trim().min(2).max(180),
   profession: z.string().trim().min(2).max(180),
   description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
-  experienceText: z.string().trim().min(2).max(1200),
-  expectedSalary: z.coerce.number().nonnegative().optional(),
+  expectedSalary: optionalExpectedSalarySchema,
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   categoryText: z.string().trim().max(120).optional(),
@@ -25,8 +38,10 @@ export const createResumeSchema = z.object({
         isPreferred: z.boolean().optional()
       })
     )
-    .min(1)
-    .max(8),
+    .max(8)
+    .default([]),
+  verifiedContactId: z.string().trim().min(1).optional(),
+  contactConsentId: z.string().trim().min(1).optional(),
   photos: z
     .array(
       z.object({

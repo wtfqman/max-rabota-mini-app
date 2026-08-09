@@ -37,6 +37,7 @@ export function serializeAdCard(ad: PublicAdRecord): PublicAdCardDto {
     address: getAddress(ad),
     category: getCategory(ad),
     chips: getCardChips(ad),
+    promotion: getPromotionFlags(ad),
     publishedAt: ad.publishedAt?.toISOString() ?? null,
     createdAt: ad.createdAt.toISOString()
   };
@@ -62,7 +63,11 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
         salaryTo: ad.vacancyDetails?.salaryTo?.toString() ?? null,
         salaryCurrency: ad.vacancyDetails?.salaryCurrency ?? ad.currency,
         salaryPeriod: serializeNullableEnum(ad.vacancyDetails?.salaryPeriod),
+        paymentFormat: ad.vacancyDetails?.paymentFormat ?? null,
         isSalaryNegotiable: ad.vacancyDetails?.isSalaryNegotiable ?? false,
+        providesAccommodation: ad.vacancyDetails?.providesAccommodation ?? false,
+        providesMeals: ad.vacancyDetails?.providesMeals ?? false,
+        projectDuration: ad.vacancyDetails?.projectDuration ?? null,
         metroStations: [
           ...(ad.vacancyDetails?.metroStations.map((metro) => ({
             id: metro.metroStation.id,
@@ -87,17 +92,21 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
       type: 'resume',
       resume: {
         name: ad.title,
-        profession: ad.resumeDetails?.desiredPosition ?? null,
+        profession: ad.resumeDetails?.profession ?? ad.resumeDetails?.desiredPosition ?? null,
+        specialization: ad.resumeDetails?.specialization ?? null,
         desiredPosition: ad.resumeDetails?.desiredPosition ?? null,
-        experienceText: getMetadataString(parseJsonRecord(ad.metadataJson), ['experienceText', 'experience']),
+        experienceText: ad.resumeDetails?.experienceText ?? getMetadataString(parseJsonRecord(ad.metadataJson), ['experienceText', 'experience']),
         experienceYears: ad.resumeDetails?.experienceYears ?? null,
         employmentType: serializeNullableEnum(ad.resumeDetails?.employmentType),
         workFormat: serializeNullableEnum(ad.resumeDetails?.workFormat),
+        desiredSchedule: ad.resumeDetails?.desiredSchedule ?? null,
         expectedSalary: ad.resumeDetails?.expectedSalary?.toString() ?? null,
         salaryCurrency: ad.resumeDetails?.salaryCurrency ?? ad.currency,
         skills: parseJsonStringArray(ad.resumeDetails?.skillsJson),
         education: ad.resumeDetails?.education ?? null,
         availability: ad.resumeDetails?.availability ?? null,
+        travelReady: ad.resumeDetails?.travelReady ?? false,
+        siteAccommodationReady: ad.resumeDetails?.siteAccommodationReady ?? false,
         portfolioUrl: ad.resumeDetails?.portfolioUrl ?? null
       }
     };
@@ -110,14 +119,20 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
       equipment: {
         name: ad.title,
         category: getCategory(ad),
+        dealType: serializeNullableEnum(ad.equipmentDetails?.dealType),
         condition: serializeNullableEnum(ad.equipmentDetails?.condition),
         brand: ad.equipmentDetails?.brand ?? null,
         model: ad.equipmentDetails?.model ?? null,
         productionYear: ad.equipmentDetails?.productionYear ?? null,
+        hourlyPrice: ad.equipmentDetails?.hourlyPrice?.toString() ?? null,
+        shiftPrice: ad.equipmentDetails?.shiftPrice?.toString() ?? null,
+        dailyPrice: ad.equipmentDetails?.dailyPrice?.toString() ?? null,
         rentalPrice: ad.equipmentDetails?.rentalPrice?.toString() ?? null,
         salePrice: ad.equipmentDetails?.salePrice?.toString() ?? null,
         depositAmount: ad.equipmentDetails?.depositAmount?.toString() ?? null,
         currency: ad.equipmentDetails?.currency ?? ad.currency,
+        operatorIncluded: ad.equipmentDetails?.operatorIncluded ?? false,
+        deliveryAvailable: ad.equipmentDetails?.deliveryAvailable ?? false,
         availability: ad.equipmentDetails?.availability ?? null
       }
     };
@@ -131,7 +146,14 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
       category: getCategory(ad),
       price: ad.priceAmount?.toString() ?? null,
       currency: ad.currency,
-      address: getAddress(ad)
+      address: getAddress(ad),
+      manufacturer: ad.productDetails?.manufacturer ?? null,
+      model: ad.productDetails?.model ?? null,
+      condition: serializeNullableEnum(ad.productDetails?.condition),
+      quantity: ad.productDetails?.quantity?.toString() ?? null,
+      unit: ad.productDetails?.unit ?? null,
+      saleType: serializeNullableEnum(ad.productDetails?.saleType),
+      deliveryAvailable: ad.productDetails?.deliveryAvailable ?? false
     }
   };
 }
@@ -149,7 +171,16 @@ function serializeBaseDetail(ad: PublicAdRecord): PublicAdBaseDetailDto {
       displayName: ad.owner.displayName,
       maxUsername: ad.owner.maxUsername,
       firstName: ad.owner.firstName,
-      lastName: ad.owner.lastName
+      lastName: ad.owner.lastName,
+      profile: ad.owner.profile
+        ? {
+            avatarUrl: ad.owner.profile.avatarUrl,
+            profileType: ad.owner.profile.profileType.toLowerCase(),
+            companyName: ad.owner.profile.companyName,
+            allowResumePublicProfile: ad.owner.profile.allowResumePublicProfile
+          }
+        : null,
+      trustBadges: ad.owner.trustBadgeAssignments.map((assignment) => assignment.badge.toLowerCase())
     },
     updatedAt: ad.updatedAt.toISOString()
   };
@@ -186,16 +217,8 @@ function getSubtitle(ad: PublicAdRecord): string | null {
     return getVacancyCompanyName(ad);
   }
 
-  if (ad.resumeDetails?.desiredPosition) {
-    return ad.resumeDetails.desiredPosition;
-  }
-
-  const equipmentName = [ad.equipmentDetails?.brand, ad.equipmentDetails?.model]
-    .filter(Boolean)
-    .join(' ');
-
-  if (equipmentName) {
-    return equipmentName;
+  if (ad.resumeDetails?.profession || ad.resumeDetails?.desiredPosition) {
+    return ad.resumeDetails.profession ?? ad.resumeDetails.desiredPosition;
   }
 
   if (ad.type === 'MATERIAL' || ad.type === 'TOOL') {
@@ -267,6 +290,12 @@ function getMetadataMetroStations(ad: PublicAdRecord) {
 }
 
 function getShortSalary(ad: PublicAdRecord): string | null {
+  const salaryText = getMetadataString(parseJsonRecord(ad.metadataJson), ['salaryText']);
+
+  if (salaryText) {
+    return salaryText;
+  }
+
   if (ad.vacancyDetails) {
     return formatMoneyRange({
       from: ad.vacancyDetails.salaryFrom?.toString() ?? null,
@@ -283,6 +312,14 @@ function getShortSalary(ad: PublicAdRecord): string | null {
 
   if (ad.equipmentDetails?.rentalPrice) {
     return formatMoneyValue(ad.equipmentDetails.rentalPrice.toString(), ad.equipmentDetails.currency);
+  }
+
+  if (ad.equipmentDetails?.shiftPrice) {
+    return formatMoneyValue(ad.equipmentDetails.shiftPrice.toString(), ad.equipmentDetails.currency);
+  }
+
+  if (ad.equipmentDetails?.dailyPrice) {
+    return formatMoneyValue(ad.equipmentDetails.dailyPrice.toString(), ad.equipmentDetails.currency);
   }
 
   if (ad.equipmentDetails?.salePrice) {
@@ -357,45 +394,6 @@ function getCoverPhoto(photos: PublicAdRecord['photos']): PublicAdRecord['photos
 
 function getCardChips(ad: PublicAdRecord): PublicAdChipDto[] {
   const chips: PublicAdChipDto[] = [];
-  const hasSalary = Boolean(getShortSalary(ad));
-
-  if (
-    ad.vacancyDetails?.schedule &&
-    !(hasSalary && isDefaultVacancyChip(ad.vacancyDetails.schedule, ['\u043f\u043e \u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u0438']))
-  ) {
-    chips.push({
-      key: 'schedule',
-      label: '\u0413\u0440\u0430\u0444\u0438\u043a',
-      value: ad.vacancyDetails.schedule
-    });
-  }
-
-  if (
-    ad.vacancyDetails?.experience &&
-    !(hasSalary && isDefaultVacancyChip(ad.vacancyDetails.experience, ['\u043e\u0431\u0441\u0443\u0436\u0434\u0430\u0435\u0442\u0441\u044f']))
-  ) {
-    chips.push({
-      key: 'experience',
-      label: '\u041e\u043f\u044b\u0442',
-      value: ad.vacancyDetails.experience
-    });
-  }
-
-  if (ad.resumeDetails?.experienceYears !== null && ad.resumeDetails?.experienceYears !== undefined) {
-    chips.push({
-      key: 'experience_years',
-      label: '\u041e\u043f\u044b\u0442',
-      value: String(ad.resumeDetails.experienceYears)
-    });
-  }
-
-  if (ad.equipmentDetails?.condition) {
-    chips.push({
-      key: 'condition',
-      label: '\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435',
-      value: serializeNullableEnum(ad.equipmentDetails.condition) ?? ad.equipmentDetails.condition
-    });
-  }
 
   if ((ad.type === 'MATERIAL' || ad.type === 'TOOL') && ad.priceAmount) {
     chips.push({
@@ -408,13 +406,20 @@ function getCardChips(ad: PublicAdRecord): PublicAdChipDto[] {
   return chips;
 }
 
-function isDefaultVacancyChip(value: string, defaults: string[]): boolean {
-  const normalized = normalizeVacancyChip(value);
-  return defaults.some((defaultValue) => normalized === normalizeVacancyChip(defaultValue));
+function getPromotionFlags(ad: PublicAdRecord) {
+  const now = Date.now();
+
+  return {
+    urgent: isFuture(ad.promotionUrgentUntil, now),
+    pinned: isFuture(ad.promotionPinnedUntil, now),
+    highlighted: isFuture(ad.promotionHighlightedUntil, now),
+    recommended: isFuture(ad.promotionRecommendedUntil, now),
+    boostedAt: ad.boostedAt?.toISOString() ?? null
+  };
 }
 
-function normalizeVacancyChip(value: string): string {
-  return value.trim().toLowerCase().replace(/\u0451/g, '\u0435').replace(/\s+/g, ' ');
+function isFuture(value: Date | null | undefined, now: number): boolean {
+  return Boolean(value && value.getTime() > now);
 }
 
 function serializeAdType(type: string): AdTypeCode {

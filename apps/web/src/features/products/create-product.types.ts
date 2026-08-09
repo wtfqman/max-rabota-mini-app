@@ -36,7 +36,8 @@ export type CreateProductPayload = z.infer<typeof createProductPayloadSchema>;
 export interface CreateProductResponse {
   id: string;
   type: ProductType;
-  status: string;
+  status: 'pending_moderation';
   title: string;
   createdAt: string;
+  payment: null;
 }

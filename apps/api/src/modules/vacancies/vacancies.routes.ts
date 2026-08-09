@@ -14,8 +14,9 @@ export function createVacanciesRouter(container: ApiContainer): Router {
   const service = new VacanciesService(
     repository,
     container.adService,
-    container.userService,
-    container.moderationNotificationService
+    container.moderationNotificationService,
+    container.adPaymentService,
+    container.notificationService
   );
   const controller = new VacanciesController(service);
 

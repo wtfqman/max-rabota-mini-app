@@ -3,10 +3,16 @@ import { contactTypeOptions } from '../vacancies/create-vacancy.types.js';
 
 export { contactTypeOptions };
 
+export const equipmentDealTypeOptions = [
+  { value: 'RENT', label: 'Аренда' },
+  { value: 'SALE', label: 'Продажа' },
+  { value: 'RENT_AND_SALE', label: 'Аренда и продажа' }
+] as const;
+
 export const createEquipmentPayloadSchema = z.object({
   title: z.string().trim().min(3, 'Укажите название техники').max(180),
-  categoryText: z.string().trim().min(2, 'Укажите категорию техники').max(120),
-  equipmentGroupText: z.string().trim().max(120).optional(),
+  categoryText: z.string().trim().max(120).optional(),
+  priceAmount: z.coerce.number().nonnegative().optional(),
   description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
@@ -43,4 +49,5 @@ export interface CreateEquipmentResponse {
   status: 'pending_moderation';
   title: string;
   createdAt: string;
+  payment: null;
 }

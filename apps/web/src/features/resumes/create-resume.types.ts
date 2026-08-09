@@ -3,12 +3,19 @@ import { contactTypeOptions } from '../vacancies/create-vacancy.types.js';
 
 export { contactTypeOptions };
 
+const optionalExpectedSalarySchema = z.preprocess((value) => {
+  if (value === '' || value === null) {
+    return undefined;
+  }
+
+  return value;
+}, z.coerce.number().nonnegative().optional());
+
 export const createResumePayloadSchema = z.object({
   name: z.string().trim().min(2, 'Укажите имя').max(180),
   profession: z.string().trim().min(2, 'Укажите профессию').max(180),
   description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
-  experienceText: z.string().trim().min(2, 'Опишите опыт').max(1200),
-  expectedSalary: z.number().nonnegative().optional(),
+  expectedSalary: optionalExpectedSalarySchema,
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   categoryText: z.string().trim().max(120).optional(),
@@ -21,8 +28,10 @@ export const createResumePayloadSchema = z.object({
         isPreferred: z.boolean().optional()
       })
     )
-    .min(1, 'Добавьте хотя бы один контакт')
+    .min(0)
     .max(8),
+  verifiedContactId: z.string().trim().min(1).optional(),
+  contactConsentId: z.string().trim().min(1).optional(),
   photos: z
     .array(
       z.object({
@@ -45,4 +54,5 @@ export interface CreateResumeResponse {
   status: 'pending_moderation';
   title: string;
   createdAt: string;
+  payment: null;
 }

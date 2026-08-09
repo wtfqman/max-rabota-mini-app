@@ -1,38 +1,30 @@
 import { z } from 'zod';
-import { adListQuerySchema } from '@rabst24/shared';
+import { VACANCY_PUBLICATION_FUNDING_MODES, VACANCY_PUBLICATION_PLAN_CODES, adListQuerySchema } from '@rabst24/shared';
 
-export const vacancyListQuerySchema = adListQuerySchema.omit({ type: true });
+export const vacancyListQuerySchema = adListQuerySchema.omit({
+  type: true,
+  schedule: true,
+  experience: true,
+  employmentType: true,
+  workFormat: true,
+  availability: true,
+  dealType: true,
+  brand: true,
+  condition: true
+});
 
 export const createVacancySchema = z.object({
   title: z.string().trim().min(5).max(180),
-  companyName: z.string().trim().min(2).max(160),
-  city: z.string().trim().min(2).max(120),
+  city: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),
   districtText: z.string().trim().max(120).optional(),
-  categoryText: z.string().trim().min(2).max(120),
-  schedule: z.string().trim().min(2).max(160),
-  workPeriods: z.array(z.string().trim().min(1).max(120)).max(10).default([]),
-  workPeriodDescription: z.string().trim().max(500).optional(),
-  experience: z.string().trim().min(2).max(160),
+  categoryText: z.string().trim().max(120).optional(),
   salaryText: z.string().trim().max(180).optional(),
-  salaryFrom: z.coerce.number().nonnegative().optional(),
-  salaryTo: z.coerce.number().nonnegative().optional(),
-  salaryPeriod: z.enum(['HOUR', 'DAY', 'WEEK', 'MONTH', 'PROJECT']).optional(),
   isSalaryNegotiable: z.boolean().optional(),
+  publicationPlan: z.enum(VACANCY_PUBLICATION_PLAN_CODES).default('single'),
+  publicationFunding: z.enum(VACANCY_PUBLICATION_FUNDING_MODES).default('auto'),
+  mediaHighlight: z.boolean().optional(),
   description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
-  requirements: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
-  responsibilities: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
-  benefits: z.array(z.string().trim().min(1).max(500)).max(30).default([]),
-  metroStations: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(160),
-        lineName: z.string().trim().max(160).optional(),
-        walkingMinutes: z.coerce.number().int().positive().max(120).optional()
-      })
-    )
-    .max(8)
-    .default([]),
   contacts: z
     .array(
       z.object({

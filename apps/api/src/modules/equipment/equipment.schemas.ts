@@ -4,13 +4,19 @@ import { adListQuerySchema } from '@rabst24/shared';
 export const equipmentListQuerySchema = adListQuerySchema.omit({
   type: true,
   schedule: true,
-  experience: true
+  experience: true,
+  employmentType: true,
+  workFormat: true,
+  availability: true,
+  dealType: true,
+  brand: true,
+  condition: true
 });
 
 export const createEquipmentSchema = z.object({
   title: z.string().trim().min(3).max(180),
-  categoryText: z.string().trim().min(2).max(120),
-  equipmentGroupText: z.string().trim().max(120).optional(),
+  categoryText: z.string().trim().max(120).optional(),
+  priceAmount: z.coerce.number().nonnegative().optional(),
   description: z.string().trim().min(3, 'Добавьте короткое описание').max(4000),
   districtText: z.string().trim().max(120).optional(),
   address: z.string().trim().max(240).optional(),

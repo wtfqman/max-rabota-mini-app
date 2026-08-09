@@ -4,7 +4,13 @@ import { adListQuerySchema } from '@rabst24/shared';
 export const tradeListQuerySchema = adListQuerySchema.omit({
   type: true,
   schedule: true,
-  experience: true
+  experience: true,
+  employmentType: true,
+  workFormat: true,
+  availability: true,
+  dealType: true,
+  brand: true,
+  condition: true
 });
 
 export const createTradeAdSchema = z.object({
