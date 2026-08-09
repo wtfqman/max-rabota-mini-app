@@ -1188,7 +1188,7 @@ function PublicationSettingsSheet({
           onChange={(value) => updateDraft('remindBeforeEnd', value)}
         />
 
-        <div className="sticky bottom-0 z-10 grid grid-cols-[1fr_auto] gap-2 rounded-[20px] border border-white/10 bg-surface-900/95 p-2 shadow-[0_-14px_36px_rgba(0,0,0,0.36)] backdrop-blur-xl">
+        <div className="sticky bottom-0 z-20 grid grid-cols-[1fr_auto] gap-2 rounded-[20px] border border-white/10 bg-surface-900/95 p-2 shadow-[0_-14px_36px_rgba(0,0,0,0.36)] backdrop-blur-xl">
           <ActionButton type="button" onClick={saveDraft} icon={<CheckCircle2 size={18} />}>
             Сохранить
           </ActionButton>
@@ -1445,9 +1445,9 @@ function formatDate(value: string): string {
 
 function Sheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[140] bg-surface-950/82 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[240] bg-surface-950/82 backdrop-blur-sm">
       <button className="absolute inset-0 z-0 h-full w-full cursor-default" type="button" tabIndex={-1} aria-label="Фон окна" />
-      <div className="absolute inset-x-0 bottom-0 z-10 max-h-[calc(100vh-24px)] overflow-y-auto rounded-t-[28px] border border-white/10 bg-surface-900 p-4 pb-[calc(18px+env(safe-area-inset-bottom))] shadow-panel app-fade-up">
+      <div className="absolute inset-x-0 bottom-[calc(78px+env(safe-area-inset-bottom))] z-10 max-h-[calc(100vh-116px-env(safe-area-inset-bottom))] overflow-y-auto rounded-t-[28px] border border-white/10 bg-surface-900 p-4 pb-4 shadow-panel app-fade-up">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-xl font-black text-text-primary">{title}</h2>
           <button

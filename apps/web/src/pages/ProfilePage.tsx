@@ -658,9 +658,9 @@ function ReferralDetailsSheet({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[170] bg-surface-950/82 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[240] bg-surface-950/82 backdrop-blur-sm" role="dialog" aria-modal="true">
       <button className="absolute inset-0 h-full w-full cursor-default" type="button" aria-label="Закрыть" onClick={onClose} />
-      <div className="app-fade-up absolute inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] mx-auto max-w-md rounded-panel border border-white/10 bg-surface-900 p-3 shadow-panel">
+      <div className="app-fade-up absolute inset-x-3 bottom-[calc(86px+env(safe-area-inset-bottom))] mx-auto max-h-[calc(100vh-132px-env(safe-area-inset-bottom))] max-w-md overflow-y-auto rounded-panel border border-white/10 bg-surface-900 p-3 shadow-panel">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-base font-black text-text-primary">Пригласить друга</h2>

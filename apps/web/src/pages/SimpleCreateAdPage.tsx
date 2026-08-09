@@ -359,6 +359,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
     if (Object.keys(nextErrors).length > 0) {
       setSubmitError('Проверьте выделенные поля и попробуйте ещё раз.');
       setMode('form');
+      window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50);
       return false;
     }
 
@@ -823,7 +824,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
 
         {pendingPaymentNotice}
 
-        <div className="sticky bottom-[88px] z-10 grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/88 p-2 shadow-[0_-14px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+        <div className="sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-[130] grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/88 p-2 shadow-[0_-14px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
           <ActionButton type="button" variant="secondary" disabled={isSubmitting} onClick={() => setMode('form')}>
             Править
           </ActionButton>
@@ -1107,7 +1108,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
         ) : null}
 
         {isVacancy ? (
-          <div className="grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/90 p-1.5 shadow-[0_-10px_34px_rgba(0,0,0,0.28)]">
+          <div className="sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-[130] grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/90 p-1.5 shadow-[0_-10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl">
             <ActionButton type="button" variant="secondary" icon={<Eye size={18} />} disabled={isSubmitting || isMediaBusy} onClick={openPreview}>
               Проверить
             </ActionButton>
@@ -1119,7 +1120,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
             </ActionButton>
           </div>
         ) : (
-          <div className="sticky bottom-[78px] z-10 grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/88 p-1.5 shadow-[0_-14px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+          <div className="sticky bottom-[calc(86px+env(safe-area-inset-bottom))] z-[130] grid grid-cols-[auto_1fr] gap-2 rounded-panel border border-white/10 bg-surface-950/88 p-1.5 shadow-[0_-14px_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
             <ActionButton type="button" variant="secondary" icon={<Eye size={18} />} disabled={isSubmitting || isMediaBusy} onClick={openPreview}>
               Проверить
             </ActionButton>
