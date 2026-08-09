@@ -17,6 +17,7 @@ import { getLaunchContext, notifyMaxAppReady } from '../../shared/max/max-bridge
 export type AppInitStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 const persistedSessionKey = 'rabst24:auth-session';
+const appInitializationTimeoutMs = 15_000;
 
 export interface CurrentUserState {
   id: string | null;
@@ -70,6 +71,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const launchContext = getLaunchContext();
+    let isActiveInitialization = true;
+    const setIfActive = (state: Partial<AppState>) => {
+      if (isActiveInitialization) {
+        set(state);
+      }
+    };
+
     notifyMaxAppReady();
 
     console.info('[MAX_AUTH]', {
@@ -89,88 +97,106 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     try {
-      const featuresResponse = await apiClient.getFeatures().catch(() => null);
-      if (featuresResponse) {
-        set({
-          features: featuresResponse.data.flags
-        });
-      }
-
-      let authResponse = null;
-
-      if (launchContext.initData) {
-        authResponse = await apiClient.verifyMaxLaunch({
-          initData: launchContext.initData,
-          platform: launchContext.platform
-        });
-      } else if (appEnv.devAuthEnabled) {
-        authResponse = await apiClient.createDevSession();
-      } else {
-        const persisted = loadPersistedSession();
-
-        if (persisted) {
-          setApiAccessToken(persisted.session.accessToken);
-          const profileResponse = await apiClient.getMe();
-          const refreshedProfile = profileResponse.data;
-
-          console.info('[MAX_AUTH]', {
-            restoredPersistedSession: true,
-            userId: refreshedProfile.id,
-            expiresAt: persisted.session.expiresAt
-          });
-          set({
-            accessToken: persisted.session.accessToken,
-            session: persisted.session,
-            profile: refreshedProfile.profile,
-            user: {
-              id: refreshedProfile.id,
-              displayName: refreshedProfile.displayName,
-              role: refreshedProfile.role,
-              status: refreshedProfile.status
-            },
-            launch: {
-              isInsideMax: launchContext.isInsideMax,
-              platform: persisted.launch.platform,
-              queryId: persisted.launch.queryId,
-              startParam: persisted.launch.startParam,
-              authDate: persisted.launch.authDate
-            }
-          });
-        }
-      }
-
-      if (authResponse) {
-        const auth = authResponse.data;
-
-        setApiAccessToken(auth.session.accessToken);
-        savePersistedSession(auth);
-        console.info('[MAX_AUTH]', {
-          verified: true,
-          userId: auth.user.id,
-          expiresAt: auth.session.expiresAt
-        });
-        set({
-          accessToken: auth.session.accessToken,
-          session: auth.session,
-          profile: auth.profile,
-          user: {
-            id: auth.user.id,
-            displayName: auth.user.displayName,
-            role: auth.user.role,
-            status: auth.user.status
-          },
-          launch: {
-            isInsideMax: launchContext.isInsideMax,
-            platform: auth.launch.platform,
-            queryId: auth.launch.queryId,
-            startParam: auth.launch.startParam,
-            authDate: auth.launch.authDate
+      await withInitializationTimeout(
+        (async () => {
+          const featuresResponse = await apiClient.getFeatures().catch(() => null);
+          if (!isActiveInitialization) {
+            return;
           }
-        });
-      }
 
-      set({ initStatus: 'ready' });
+          if (featuresResponse) {
+            setIfActive({
+              features: featuresResponse.data.flags
+            });
+          }
+
+          let authResponse = null;
+
+          if (launchContext.initData) {
+            authResponse = await apiClient.verifyMaxLaunch({
+              initData: launchContext.initData,
+              platform: launchContext.platform
+            });
+          } else if (appEnv.devAuthEnabled) {
+            authResponse = await apiClient.createDevSession();
+          } else {
+            const persisted = loadPersistedSession();
+
+            if (persisted) {
+              setApiAccessToken(persisted.session.accessToken);
+              const profileResponse = await apiClient.getMe();
+              if (!isActiveInitialization) {
+                return;
+              }
+
+              const refreshedProfile = profileResponse.data;
+
+              console.info('[MAX_AUTH]', {
+                restoredPersistedSession: true,
+                userId: refreshedProfile.id,
+                expiresAt: persisted.session.expiresAt
+              });
+              setIfActive({
+                accessToken: persisted.session.accessToken,
+                session: persisted.session,
+                profile: refreshedProfile.profile,
+                user: {
+                  id: refreshedProfile.id,
+                  displayName: refreshedProfile.displayName,
+                  role: refreshedProfile.role,
+                  status: refreshedProfile.status
+                },
+                launch: {
+                  isInsideMax: launchContext.isInsideMax,
+                  platform: persisted.launch.platform,
+                  queryId: persisted.launch.queryId,
+                  startParam: persisted.launch.startParam,
+                  authDate: persisted.launch.authDate
+                }
+              });
+            }
+          }
+
+          if (!isActiveInitialization) {
+            return;
+          }
+
+          if (authResponse) {
+            const auth = authResponse.data;
+
+            setApiAccessToken(auth.session.accessToken);
+            savePersistedSession(auth);
+            console.info('[MAX_AUTH]', {
+              verified: true,
+              userId: auth.user.id,
+              expiresAt: auth.session.expiresAt
+            });
+            setIfActive({
+              accessToken: auth.session.accessToken,
+              session: auth.session,
+              profile: auth.profile,
+              user: {
+                id: auth.user.id,
+                displayName: auth.user.displayName,
+                role: auth.user.role,
+                status: auth.user.status
+              },
+              launch: {
+                isInsideMax: launchContext.isInsideMax,
+                platform: auth.launch.platform,
+                queryId: auth.launch.queryId,
+                startParam: auth.launch.startParam,
+                authDate: auth.launch.authDate
+              }
+            });
+          }
+
+          setIfActive({ initStatus: 'ready' });
+        })(),
+        appInitializationTimeoutMs
+      );
     } catch (error) {
+      isActiveInitialization = false;
       setApiAccessToken(null);
       clearPersistedSession();
       set({
@@ -186,6 +212,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     void get().initialize();
   }
 }));
+
+function withInitializationTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId = 0;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error('app_init_timeout'));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
+}
 
 type PersistedAuth = VerifyMaxLaunchResponse;
 
