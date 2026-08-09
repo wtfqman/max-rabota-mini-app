@@ -240,6 +240,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
   } | null>(null);
   const [contactVerificationNotice, setContactVerificationNotice] = useState<string | null>(null);
   const [isContactVerificationBusy, setIsContactVerificationBusy] = useState(false);
+  const resumeContactVerificationRequired = copy.kind === 'resume' && (contactVerificationEnabled || botContactFallbackEnabled);
 
   useEffect(() => {
     setMode('form');
@@ -346,7 +347,11 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
       nextErrors.money = copy.kind === 'vacancy' ? 'Укажите зарплату или диапазон.' : copy.moneyLabel === 'Цена' ? 'Укажите цену.' : 'Укажите зарплату.';
     }
 
-    if (!verifiedResumeContact && form.contact.trim().length < 3) {
+    if (resumeContactVerificationRequired && !verifiedResumeContact) {
+      nextErrors.contact = botContactFallbackEnabled
+        ? 'Подтвердите номер через MAX или через бота.'
+        : 'Подтвердите номер через MAX.';
+    } else if (!verifiedResumeContact && form.contact.trim().length < 3) {
       nextErrors.contact = 'Укажите контакт для связи.';
     }
 
@@ -944,7 +949,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
                 placeholder={copy.contactPlaceholder}
                 value={form.contact}
                 error={errors.contact}
-                required={!verifiedResumeContact}
+                required={!verifiedResumeContact && !resumeContactVerificationRequired}
                 onChange={(event) => updateField('contact', event.target.value)}
               />
               {contactVerificationEnabled || botContactFallbackEnabled || verifiedResumeContact || contactVerificationNotice ? (
@@ -952,7 +957,9 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
                   <div>
                     <p className="text-sm font-black text-text-primary">Подтверждение MAX</p>
                     <p className="mt-1 text-xs leading-5 text-text-secondary">
-                      Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.
+                      {resumeContactVerificationRequired
+                        ? 'Для публикации резюме нужно подтвердить номер. Обычный текстовый контакт не заменяет подтверждение.'
+                        : 'Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.'}
                     </p>
                   </div>
                   {verifiedResumeContact ? (
