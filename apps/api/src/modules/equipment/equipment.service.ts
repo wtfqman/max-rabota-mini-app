@@ -102,6 +102,7 @@ export class EquipmentService extends FoundationService {
       title: 'Отправлено на модерацию',
       body: `Объявление «${title}» отправлено на проверку.`,
       category: 'ad_status',
+      critical: true,
       idempotencyKey: `ad:${adId}:submitted`,
       deepLink: this.notificationService.buildMyAdsLink(),
       payload: {

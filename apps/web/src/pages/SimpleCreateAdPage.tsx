@@ -468,7 +468,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
         maskedValue: response.data.contact.maskedValue,
         expiresAt: response.data.contact.expiresAt
       });
-      setContactVerificationNotice('Контакт подтверждён через MAX.');
+      setContactVerificationNotice(null);
       setErrors((current) => ({ ...current, contact: undefined }));
     } catch (error) {
       setContactVerificationNotice(getContactVerificationError(error));
@@ -1013,7 +1013,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
                     </div>
                   ) : null}
                   {!verifiedResumeContact && errors.contact ? <p className="text-sm font-semibold text-red-100">{errors.contact}</p> : null}
-                  {contactVerificationNotice ? (
+                  {!verifiedResumeContact && contactVerificationNotice ? (
                     <p className="rounded-panel border border-white/10 bg-surface-950/60 px-3 py-2 text-sm font-semibold text-text-secondary">
                       {contactVerificationNotice}
                     </p>

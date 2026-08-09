@@ -207,7 +207,7 @@ export class VacanciesService extends FoundationService {
       title: hasPayment ? 'Требуется оплата' : 'Отправлено на модерацию',
       body: hasPayment ? 'После оплаты вакансия автоматически уйдёт на модерацию.' : `Вакансия «${title}» отправлена на проверку.`,
       category: hasPayment ? 'payments' : 'ad_status',
-      critical: hasPayment,
+      critical: true,
       idempotencyKey: hasPayment ? `ad:${adId}:payment-required` : `ad:${adId}:submitted`,
       deepLink: hasPayment ? this.notificationService.buildPaymentLink(paymentId) : this.notificationService.buildMyAdsLink(),
       payload: {

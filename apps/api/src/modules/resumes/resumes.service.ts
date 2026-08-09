@@ -112,6 +112,7 @@ export class ResumesService extends FoundationService {
       title: 'Отправлено на модерацию',
       body: `Резюме «${title}» отправлено на проверку.`,
       category: 'ad_status',
+      critical: true,
       idempotencyKey: `ad:${adId}:submitted`,
       deepLink: this.notificationService.buildMyAdsLink(),
       payload: {

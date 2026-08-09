@@ -2352,6 +2352,7 @@ export class AdPaymentService {
           title: 'Объявление отправлено на модерацию',
           body: `После оплаты объявление «${context.adTitle}» отправлено на проверку.`,
           category: 'ad_status',
+          critical: true,
           idempotencyKey: `ad:${context.adId}:payment:${context.paymentRecordId}:submitted`,
           deepLink: this.notificationService.buildMyAdsLink(),
           payload: {

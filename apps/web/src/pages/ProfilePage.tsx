@@ -715,7 +715,9 @@ function VerifiedContactsSection({
       : status === 'error'
         ? 'Ошибка загрузки'
         : primaryContact
-          ? `${primaryContact.maskedValue} · ${contactStatusLabel(primaryContact.status)}`
+          ? primaryContact.status === 'verified'
+            ? 'Номер подтверждён'
+            : contactStatusLabel(primaryContact.status)
           : 'Требуется подтверждение';
 
   return (

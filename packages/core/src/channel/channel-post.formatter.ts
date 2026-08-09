@@ -222,6 +222,10 @@ export class ChannelPostFormatter {
   }
 
   private getContactsBlock(ad: AdWithDetailsRecord): string | null {
+    if (this.getAdType(ad) === 'resume') {
+      return null;
+    }
+
     const contacts = ad.contacts
       .map((contact) => this.formatContact(contact))
       .filter((contact): contact is string => Boolean(contact));

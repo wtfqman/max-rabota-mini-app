@@ -418,6 +418,10 @@ export class TelegramPublicationService {
   }
 
   private getContactsBlock(ad: AdWithDetailsRecord): string | null {
+    if (ad.type.toLowerCase() === 'resume') {
+      return null;
+    }
+
     const contacts = ad.contacts
       .map((contact) => contact.value?.trim())
       .filter((value): value is string => Boolean(value))
