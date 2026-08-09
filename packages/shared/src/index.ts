@@ -1,5 +1,6 @@
 export * from './domain/ad.js';
 export * from './domain/ad-search.js';
+export * from './domain/contact-redaction.js';
 export * from './domain/feature-flags.js';
 export * from './domain/payment-purpose.js';
 export * from './domain/user.js';

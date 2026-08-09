@@ -1,12 +1,13 @@
-import type {
-  AdTypeCode,
-  PublicAdBaseDetailDto,
-  PublicAdCardDto,
-  PublicAdChipDto,
-  PublicAdContactDto,
-  PublicAdDetailDto,
-  PublicAdListMetaDto,
-  PublicAdPhotoDto
+import {
+  redactPhoneContacts,
+  type AdTypeCode,
+  type PublicAdBaseDetailDto,
+  type PublicAdCardDto,
+  type PublicAdChipDto,
+  type PublicAdContactDto,
+  type PublicAdDetailDto,
+  type PublicAdListMetaDto,
+  type PublicAdPhotoDto
 } from '@rabst24/shared';
 import type { PublicAdListResult, PublicAdRecord } from './ad.repository.js';
 
@@ -27,7 +28,7 @@ export function serializeAdCard(ad: PublicAdRecord): PublicAdCardDto {
     id: ad.id,
     type,
     title: ad.title,
-    description: ad.description,
+    description: type === 'resume' ? redactPhoneContacts(ad.description) : ad.description,
     subtitle: getSubtitle(ad),
     coverPhoto: serializePhoto(getCoverPhoto(ad.photos)),
     shortSalary: getShortSalary(ad),
@@ -90,6 +91,7 @@ export function serializeAdDetail(ad: PublicAdRecord): PublicAdDetailDto {
     return {
       ...base,
       type: 'resume',
+      description: redactPhoneContacts(base.description),
       resume: {
         name: ad.title,
         profession: ad.resumeDetails?.profession ?? ad.resumeDetails?.desiredPosition ?? null,

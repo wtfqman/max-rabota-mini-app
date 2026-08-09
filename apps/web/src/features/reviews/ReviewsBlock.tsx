@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Send, Star } from 'lucide-react';
+import { Loader2, RefreshCw, Send, Star } from 'lucide-react';
 import { useAppStore } from '../../app/store/app-store.js';
 import type { ReviewItem } from '../ads/ad.types.js';
 import { apiClient } from '../../shared/api/client.js';
@@ -12,6 +12,8 @@ interface ReviewsBlockProps {
   adId: string;
   adTitle: string;
 }
+
+const reviewsLoadTimeoutMs = 8_000;
 
 export function ReviewsBlock({ subjectUserId, adId, adTitle }: ReviewsBlockProps) {
   const currentUserId = useAppStore((state) => state.user.id);
@@ -28,6 +30,15 @@ export function ReviewsBlock({ subjectUserId, adId, adTitle }: ReviewsBlockProps
 
   useEffect(() => {
     let active = true;
+    const timeoutId = window.setTimeout(() => {
+      if (!active) {
+        return;
+      }
+
+      setError('Отзывы не загрузились. Можно продолжить без них или обновить блок.');
+      setStatus('error');
+    }, reviewsLoadTimeoutMs);
+
     setStatus('loading');
     setError(null);
 
@@ -48,10 +59,14 @@ export function ReviewsBlock({ subjectUserId, adId, adTitle }: ReviewsBlockProps
 
         setError(getUserFacingError(requestError, 'reviews_load'));
         setStatus('error');
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
   }, [subjectUserId]);
 
@@ -103,7 +118,14 @@ export function ReviewsBlock({ subjectUserId, adId, adTitle }: ReviewsBlockProps
           </div>
         ) : null}
 
-        {status === 'error' ? <p className="text-sm font-semibold text-red-100">{error}</p> : null}
+        {status === 'error' ? (
+          <div className="grid gap-2 rounded-panel border border-white/8 bg-white/[0.03] p-3">
+            <p className="text-sm font-semibold text-red-100">{error}</p>
+            <ActionButton variant="secondary" icon={<RefreshCw size={18} />} onClick={() => window.location.reload()}>
+              Обновить страницу
+            </ActionButton>
+          </div>
+        ) : null}
 
         {status === 'ready' && reviews.length > 0 ? (
           <div className="grid gap-2">

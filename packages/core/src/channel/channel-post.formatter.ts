@@ -1,4 +1,4 @@
-import type { AdTypeCode } from '@rabst24/shared';
+import { redactPhoneContacts, type AdTypeCode } from '@rabst24/shared';
 import type { MaxInlineKeyboardAttachment } from '@rabst24/max-api';
 import type { AdWithDetailsRecord } from '../ads/ad.repository.js';
 
@@ -149,7 +149,7 @@ export class ChannelPostFormatter {
   private formatResume(ad: AdWithDetailsRecord): Array<string | null> {
     return [
       this.formatLine('Профессия', ad.resumeDetails?.profession ?? ad.resumeDetails?.desiredPosition),
-      this.formatLine('Описание', ad.description, ['Описание']),
+      this.formatLine('Описание', redactPhoneContacts(ad.description), ['Описание']),
       this.formatLine('Желаемая сумма', this.formatMoneyValue(ad.resumeDetails?.expectedSalary, ad.resumeDetails?.salaryCurrency ?? ad.currency)),
       this.formatLine('Адрес', this.getAddress(ad))
     ];

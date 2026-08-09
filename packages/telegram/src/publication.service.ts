@@ -8,7 +8,7 @@ import {
   TelegramTargetType,
   type TelegramTarget
 } from '@rabst24/db';
-import { AppError } from '@rabst24/shared';
+import { AppError, redactPhoneContacts } from '@rabst24/shared';
 import { escapeTelegramHtml, type TelegramApiClient, type TelegramChatMember } from './telegram-api-client.js';
 import type { ExternalPublicationRepository, TelegramTargetRepository } from './repositories.js';
 
@@ -340,13 +340,14 @@ export class TelegramPublicationService {
 
   private formatAd(ad: AdWithDetailsRecord): string {
     const type = ad.type.toLowerCase();
+    const publicDescription = type === 'resume' ? redactPhoneContacts(ad.description) : ad.description;
     const lines = [
       `<b>${escapeTelegramHtml(this.getTypeLabel(type))}: ${escapeTelegramHtml(ad.title)}</b>`,
       ad.categoryText ? `Категория: ${escapeTelegramHtml(ad.categoryText)}` : null,
       ad.city ? `Город: ${escapeTelegramHtml(ad.city)}` : null,
       ad.districtText ? `Район: ${escapeTelegramHtml(ad.districtText)}` : null,
       this.getPriceLine(ad),
-      ad.description ? `\n${escapeTelegramHtml(ad.description)}` : null,
+      publicDescription ? `\n${escapeTelegramHtml(publicDescription)}` : null,
       this.getContactsBlock(ad),
       `\n<a href="${escapeTelegramHtml(this.getAdUrl(ad))}">Открыть объявление в RABST24</a>`
     ];

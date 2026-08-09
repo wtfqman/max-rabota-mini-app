@@ -16,18 +16,42 @@ export function ReviewsPage() {
   const average = useMemo(() => getAverageRating(reviews), [reviews]);
 
   const loadReviews = () => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      setError('Отзывы не загрузились. Попробуйте обновить раздел ещё раз.');
+      setStatus('error');
+    }, 8_000);
+
     setStatus('loading');
     setError(null);
 
     apiClient
       .listMyReviews()
       .then((response) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
         setReviews(response.data);
         setStatus('ready');
       })
       .catch((requestError: unknown) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
         setError(getUserFacingError(requestError, 'reviews_load'));
         setStatus('error');
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
   };
 
