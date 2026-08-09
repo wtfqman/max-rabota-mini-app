@@ -27,7 +27,7 @@ export interface MaxWebApp {
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   openMaxLink?: (url: string) => void;
   openExternalLink?: (url: string) => void;
-  requestContact?: () => Promise<{ phone: string; authDate: string | number; hash: string }>;
+  requestContact?: () => Promise<unknown>;
 }
 
 type BrowserWindowLike = {

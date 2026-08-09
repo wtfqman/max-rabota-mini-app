@@ -40,6 +40,7 @@ import { ApiError } from '../shared/api/http.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
 import {
   closeReservedExternalNavigation,
+  getLaunchContext,
   getMaxWebApp,
   getMaxPlatform,
   isValidPaymentConfirmationUrl,
@@ -201,6 +202,8 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
   const isVacancy = kind === 'vacancy';
   const accessToken = useAppStore((state) => state.accessToken);
   const currentUserId = useAppStore((state) => state.user.id);
+  const contactVerificationEnabled = useAppStore((state) => state.features.CONTACT_VERIFICATION_ENABLED && state.features.MAX_CONTACT_VERIFICATION_ENABLED);
+  const botContactFallbackEnabled = useAppStore((state) => state.features.CONTACT_VERIFICATION_ENABLED && state.features.BOT_CONTACT_FALLBACK_ENABLED);
   const draftKey = `rabst24:create:${kind}:simple`;
   const draftPhotosKey = `${draftKey}:photos`;
   const isSubmittingRef = useRef(false);
@@ -379,6 +382,11 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
   };
 
   const verifyResumeContactViaMax = async () => {
+    if (!contactVerificationEnabled) {
+      setContactVerificationNotice('Подтверждение через MAX сейчас отключено. Можно отправить резюме с обычным контактом.');
+      return;
+    }
+
     const webApp = getMaxWebApp();
 
     if (!webApp || typeof webApp.requestContact !== 'function') {
@@ -386,7 +394,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
       return;
     }
 
-    const maxUserId = webApp.initDataUnsafe?.user?.id;
+    const maxUserId = webApp.initDataUnsafe?.user?.id ?? getLaunchContext().user?.id;
     if (!maxUserId) {
       setContactVerificationNotice('Не удалось определить MAX пользователя. Откройте мини-приложение внутри MAX.');
       return;
@@ -396,7 +404,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
     setContactVerificationNotice(null);
 
     try {
-      const contact = await webApp.requestContact();
+      const contact = normalizeMaxContactPayload(await webApp.requestContact(), maxUserId);
       const response = await apiClient.verifyMaxMiniAppContact({
         phone: contact.phone,
         authDate: contact.authDate,
@@ -418,13 +426,18 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
       setContactVerificationNotice('Контакт подтверждён через MAX.');
       setErrors((current) => ({ ...current, contact: undefined }));
     } catch (error) {
-      setContactVerificationNotice(getUserFacingError(error, 'profile_load'));
+      setContactVerificationNotice(getContactVerificationError(error));
     } finally {
       setIsContactVerificationBusy(false);
     }
   };
 
   const requestResumeContactViaBot = async () => {
+    if (!botContactFallbackEnabled) {
+      setContactVerificationNotice('Подтверждение через бота сейчас отключено. Можно отправить резюме с обычным контактом.');
+      return;
+    }
+
     setIsContactVerificationBusy(true);
     setContactVerificationNotice(null);
 
@@ -432,7 +445,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
       await apiClient.requestMaxBotContactVerification();
       setContactVerificationNotice('Мы отправили кнопку подтверждения в MAX-бот. Нажмите «Поделиться контактом», затем вернитесь и обновите статус.');
     } catch (error) {
-      setContactVerificationNotice(getUserFacingError(error, 'profile_load'));
+      setContactVerificationNotice(getContactVerificationError(error));
     } finally {
       setIsContactVerificationBusy(false);
     }
@@ -934,43 +947,51 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
                 required={!verifiedResumeContact}
                 onChange={(event) => updateField('contact', event.target.value)}
               />
-              <div>
-                <p className="text-sm font-black text-text-primary">Подтверждение MAX</p>
-                <p className="mt-1 text-xs leading-5 text-text-secondary">
-                  Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.
-                </p>
-              </div>
-              {verifiedResumeContact ? (
-                <div className="rounded-panel border border-accent-green/25 bg-accent-greenSoft px-3 py-2">
-                  <p className="text-sm font-black text-accent-green">Контакт подтверждён через MAX</p>
-                  <p className="mt-1 text-sm text-text-primary">{verifiedResumeContact.maskedValue}</p>
-                </div>
+              {contactVerificationEnabled || botContactFallbackEnabled || verifiedResumeContact || contactVerificationNotice ? (
+                <>
+                  <div>
+                    <p className="text-sm font-black text-text-primary">Подтверждение MAX</p>
+                    <p className="mt-1 text-xs leading-5 text-text-secondary">
+                      Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.
+                    </p>
+                  </div>
+                  {verifiedResumeContact ? (
+                    <div className="rounded-panel border border-accent-green/25 bg-accent-greenSoft px-3 py-2">
+                      <p className="text-sm font-black text-accent-green">Контакт подтверждён через MAX</p>
+                      <p className="mt-1 text-sm text-text-primary">{verifiedResumeContact.maskedValue}</p>
+                    </div>
+                  ) : null}
+                  {errors.contact ? <p className="text-sm font-semibold text-red-100">{errors.contact}</p> : null}
+                  {contactVerificationNotice ? (
+                    <p className="rounded-panel border border-white/10 bg-surface-950/60 px-3 py-2 text-sm font-semibold text-text-secondary">
+                      {contactVerificationNotice}
+                    </p>
+                  ) : null}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {contactVerificationEnabled ? (
+                      <ActionButton
+                        type="button"
+                        icon={isContactVerificationBusy ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                        disabled={isContactVerificationBusy}
+                        onClick={() => void verifyResumeContactViaMax()}
+                      >
+                        Подтвердить через MAX
+                      </ActionButton>
+                    ) : null}
+                    {botContactFallbackEnabled ? (
+                      <ActionButton
+                        type="button"
+                        variant="secondary"
+                        icon={<Send size={18} />}
+                        disabled={isContactVerificationBusy}
+                        onClick={() => void requestResumeContactViaBot()}
+                      >
+                        Через бота
+                      </ActionButton>
+                    ) : null}
+                  </div>
+                </>
               ) : null}
-              {errors.contact ? <p className="text-sm font-semibold text-red-100">{errors.contact}</p> : null}
-              {contactVerificationNotice ? (
-                <p className="rounded-panel border border-white/10 bg-surface-950/60 px-3 py-2 text-sm font-semibold text-text-secondary">
-                  {contactVerificationNotice}
-                </p>
-              ) : null}
-              <div className="grid gap-2 sm:grid-cols-2">
-                <ActionButton
-                  type="button"
-                  icon={isContactVerificationBusy ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                  disabled={isContactVerificationBusy}
-                  onClick={() => void verifyResumeContactViaMax()}
-                >
-                  Подтвердить через MAX
-                </ActionButton>
-                <ActionButton
-                  type="button"
-                  variant="secondary"
-                  icon={<Send size={18} />}
-                  disabled={isContactVerificationBusy}
-                  onClick={() => void requestResumeContactViaBot()}
-                >
-                  Через бота
-                </ActionButton>
-              </div>
             </div>
           ) : (
             <Input
@@ -1232,6 +1253,70 @@ function formatRubAmount(amount: string): string {
 
 function parseRubAmount(amount: string): number {
   return Number(amount.replace(',', '.'));
+}
+
+function normalizeMaxContactPayload(rawContact: unknown, fallbackUserId: string | number): {
+  phone: string;
+  authDate: string | number;
+  hash: string;
+  userId: string | number;
+} {
+  if (!rawContact || typeof rawContact !== 'object') {
+    throw new Error('MAX не вернул данные контакта.');
+  }
+
+  const contact = rawContact as Record<string, unknown>;
+  const phone = pickString(contact.phone, contact.phoneNumber, contact.phone_number);
+  const authDate = pickStringOrNumber(contact.authDate, contact.auth_date, contact.auth_date_ms);
+  const hash = pickString(contact.hash);
+  const userId = pickStringOrNumber(contact.userId, contact.user_id) ?? fallbackUserId;
+
+  if (!phone || !authDate || !hash) {
+    throw new Error('MAX вернул неполные данные контакта.');
+  }
+
+  return {
+    phone,
+    authDate,
+    hash,
+    userId
+  };
+}
+
+function pickString(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string' && value.trim().length > 0)?.trim();
+}
+
+function pickStringOrNumber(...values: unknown[]): string | number | undefined {
+  return values.find((value): value is string | number => (typeof value === 'string' && value.trim().length > 0) || typeof value === 'number');
+}
+
+function getContactVerificationError(error: unknown): string {
+  if (error instanceof ApiError) {
+    const details = error.details as { code?: unknown; feature?: unknown } | undefined;
+    const code = typeof details?.code === 'string' ? details.code : undefined;
+    const feature = typeof details?.feature === 'string' ? details.feature : undefined;
+
+    if (error.status === 404 && code === 'FEATURE_DISABLED') {
+      return feature === 'BOT_CONTACT_FALLBACK_ENABLED'
+        ? 'Подтверждение через бота сейчас отключено на сервере. Можно отправить резюме с обычным контактом.'
+        : 'Подтверждение через MAX сейчас отключено на сервере. Можно отправить резюме с обычным контактом.';
+    }
+
+    if (error.status === 401 && code === 'MAX_CONTACT_HASH_INVALID') {
+      return 'MAX вернул контакт, но подпись не прошла проверку. Попробуйте подтвердить через бота или отправьте резюме с обычным контактом.';
+    }
+
+    if (error.status === 403 && code === 'MAX_CONTACT_FOREIGN_USER') {
+      return 'Этот контакт относится к другому MAX аккаунту. Откройте приложение под своим аккаунтом или укажите обычный контакт.';
+    }
+
+    if (error.status === 400 && code === 'MAX_CONTACT_AUTH_DATE_EXPIRED') {
+      return 'Срок подтверждения контакта истёк. Нажмите подтверждение ещё раз.';
+    }
+  }
+
+  return getUserFacingError(error, 'profile_load');
 }
 
 function logPaymentClient(label: string, details: Record<string, unknown>): void {
