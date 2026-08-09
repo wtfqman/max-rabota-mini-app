@@ -302,6 +302,46 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
     };
   }, [accessToken, isVacancy]);
 
+  useEffect(() => {
+    if (copy.kind !== 'resume' || !accessToken || !resumeContactVerificationRequired) {
+      return;
+    }
+
+    let active = true;
+
+    apiClient
+      .listVerifiedContacts()
+      .then((response) => {
+        if (!active || verifiedResumeContact) {
+          return;
+        }
+
+        const contact = response.data.find(
+          (item) => item.activeConsent?.id && item.status.toLowerCase() === 'verified'
+        );
+
+        if (!contact?.activeConsent?.id) {
+          return;
+        }
+
+        setVerifiedResumeContact({
+          verifiedContactId: contact.id,
+          contactConsentId: contact.activeConsent.id,
+          maskedValue: contact.maskedValue,
+          expiresAt: contact.expiresAt
+        });
+        setContactVerificationNotice(null);
+        setErrors((current) => ({ ...current, contact: undefined }));
+      })
+      .catch(() => {
+        // Existing contact lookup is optional; manual confirmation remains available.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, copy.kind, resumeContactVerificationRequired, verifiedResumeContact]);
+
   const updatePhotos = (nextPhotos: UploadedPhoto[]) => {
     const normalizedPhotos = normalizeAdMedia(nextPhotos, copy.maxPhotos, 1);
 
@@ -944,59 +984,65 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
           />
           {copy.kind === 'resume' ? (
             <div className="grid gap-3 rounded-panel border border-white/10 bg-surface-900/92 p-3">
-              <Input
-                label={requiredLabel('Контакты')}
-                placeholder={copy.contactPlaceholder}
-                value={form.contact}
-                error={errors.contact}
-                required={!verifiedResumeContact && !resumeContactVerificationRequired}
-                onChange={(event) => updateField('contact', event.target.value)}
-              />
+              {!verifiedResumeContact ? (
+                <Input
+                  label={requiredLabel('Контакты')}
+                  placeholder={copy.contactPlaceholder}
+                  value={form.contact}
+                  error={errors.contact}
+                  required={!resumeContactVerificationRequired}
+                  onChange={(event) => updateField('contact', event.target.value)}
+                />
+              ) : null}
               {contactVerificationEnabled || botContactFallbackEnabled || verifiedResumeContact || contactVerificationNotice ? (
                 <>
                   <div>
                     <p className="text-sm font-black text-text-primary">Подтверждение MAX</p>
                     <p className="mt-1 text-xs leading-5 text-text-secondary">
-                      {resumeContactVerificationRequired
+                      {verifiedResumeContact
+                        ? 'Номер подтверждён. Повторное подтверждение не требуется.'
+                        : resumeContactVerificationRequired
                         ? 'Для публикации резюме нужно подтвердить номер. Обычный текстовый контакт не заменяет подтверждение.'
                         : 'Можно отправить резюме с обычным контактом или подтвердить контакт через MAX.'}
                     </p>
                   </div>
                   {verifiedResumeContact ? (
                     <div className="rounded-panel border border-accent-green/25 bg-accent-greenSoft px-3 py-2">
-                      <p className="text-sm font-black text-accent-green">Контакт подтверждён через MAX</p>
+                      <p className="text-sm font-black text-accent-green">Номер подтверждён</p>
                       <p className="mt-1 text-sm text-text-primary">{verifiedResumeContact.maskedValue}</p>
                     </div>
                   ) : null}
-                  {errors.contact ? <p className="text-sm font-semibold text-red-100">{errors.contact}</p> : null}
+                  {!verifiedResumeContact && errors.contact ? <p className="text-sm font-semibold text-red-100">{errors.contact}</p> : null}
                   {contactVerificationNotice ? (
                     <p className="rounded-panel border border-white/10 bg-surface-950/60 px-3 py-2 text-sm font-semibold text-text-secondary">
                       {contactVerificationNotice}
                     </p>
                   ) : null}
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {contactVerificationEnabled ? (
-                      <ActionButton
-                        type="button"
-                        icon={isContactVerificationBusy ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                        disabled={isContactVerificationBusy}
-                        onClick={() => void verifyResumeContactViaMax()}
-                      >
-                        Подтвердить через MAX
-                      </ActionButton>
-                    ) : null}
-                    {botContactFallbackEnabled ? (
-                      <ActionButton
-                        type="button"
-                        variant="secondary"
-                        icon={<Send size={18} />}
-                        disabled={isContactVerificationBusy}
-                        onClick={() => void requestResumeContactViaBot()}
-                      >
-                        Через бота
-                      </ActionButton>
-                    ) : null}
-                  </div>
+                  {!verifiedResumeContact ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {contactVerificationEnabled ? (
+                        <ActionButton
+                          type="button"
+                          icon={isContactVerificationBusy ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                          disabled={isContactVerificationBusy}
+                          onClick={() => void verifyResumeContactViaMax()}
+                        >
+                          Подтвердить через MAX
+                        </ActionButton>
+                      ) : null}
+                      {botContactFallbackEnabled ? (
+                        <ActionButton
+                          type="button"
+                          variant="secondary"
+                          icon={<Send size={18} />}
+                          disabled={isContactVerificationBusy}
+                          onClick={() => void requestResumeContactViaBot()}
+                        >
+                          Через бота
+                        </ActionButton>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </div>
