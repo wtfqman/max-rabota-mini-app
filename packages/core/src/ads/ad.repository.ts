@@ -21,7 +21,7 @@ import {
 } from '@rabst24/shared';
 import { getAdPublicationSettings, mergeAdPublicationSettings } from './ad-publication-settings.js';
 
-export const PUBLIC_AD_MAX_AGE_DAYS = 30;
+export const PUBLIC_AD_MAX_AGE_DAYS = 7;
 
 export function buildPublicAdFreshnessFilters(now = new Date()): Prisma.AdWhereInput[] {
   const freshSince = new Date(now.getTime() - PUBLIC_AD_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
