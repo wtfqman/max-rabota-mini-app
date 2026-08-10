@@ -246,6 +246,8 @@ export interface ModerationQueueQuery {
 }
 
 export class AdRepository {
+  private promotionExpirationCheckedAt = 0;
+
   constructor(private readonly db: PrismaClient) {}
 
   async createPending(data: Prisma.AdCreateInput, status: AdStatus = AdStatus.PENDING_MODERATION) {
@@ -321,38 +323,37 @@ export class AdRepository {
     const where = this.buildPublicWhere(query, forcedType);
     const page = query.page;
     const perPage = query.perPage;
+    const offset = (page - 1) * perPage;
 
-    const [items, total] = await this.db.$transaction([
-      this.db.ad.findMany({
-        where,
-        include: adWithDetailsInclude,
-        orderBy: [
-          {
-            promotionPinnedUntil: 'desc'
-          },
-          {
-            promotionRecommendedUntil: 'desc'
-          },
-          {
-            promotionUrgentUntil: 'desc'
-          },
-          {
-            boostedAt: 'desc'
-          },
-          {
-            publishedAt: 'desc'
-          },
-          {
-            createdAt: 'desc'
-          }
-        ],
-        skip: (page - 1) * perPage,
-        take: perPage
-      }),
-      this.db.ad.count({
-        where
-      })
-    ]);
+    const pageItems = await this.db.ad.findMany({
+      where,
+      include: adWithDetailsInclude,
+      orderBy: [
+        {
+          promotionPinnedUntil: 'desc'
+        },
+        {
+          promotionRecommendedUntil: 'desc'
+        },
+        {
+          promotionUrgentUntil: 'desc'
+        },
+        {
+          boostedAt: 'desc'
+        },
+        {
+          publishedAt: 'desc'
+        },
+        {
+          createdAt: 'desc'
+        }
+      ],
+      skip: offset,
+      take: perPage + 1
+    });
+    const hasMore = pageItems.length > perPage;
+    const items = hasMore ? pageItems.slice(0, perPage) : pageItems;
+    const total = offset + items.length + (hasMore ? 1 : 0);
 
     return {
       items,
@@ -792,6 +793,12 @@ export class AdRepository {
   }
 
   private async expirePromotionSortFields(now = new Date()): Promise<void> {
+    if (now.getTime() - this.promotionExpirationCheckedAt < 60_000) {
+      return;
+    }
+
+    this.promotionExpirationCheckedAt = now.getTime();
+
     await this.db.$transaction([
       this.db.ad.updateMany({
         where: {
