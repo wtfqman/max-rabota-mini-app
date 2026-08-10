@@ -2,10 +2,12 @@ import {
   AdReportStatus,
   AdStatus,
   ModerationAction,
+  UserRole,
   UserStatus,
   type Prisma,
   type PrismaClient
 } from '@rabst24/db';
+import { logger } from '@rabst24/config';
 import { AppError } from '@rabst24/shared';
 import type { ModerationService as CoreModerationService } from '@rabst24/core';
 import type { ChannelPublishingService } from '@rabst24/core';
@@ -124,6 +126,8 @@ export class AdReportsService {
       return created;
     });
 
+    await this.notifyModeratorsAboutNewReport(report.id, ad.id, ad.title, ad.ownerId, dto.reason);
+
     return {
       report: {
         id: report.id,
@@ -131,6 +135,64 @@ export class AdReportsService {
         duplicate: false
       }
     };
+  }
+
+  private async notifyModeratorsAboutNewReport(
+    reportId: string,
+    adId: string,
+    adTitle: string,
+    ownerId: string,
+    reason: CreateAdReportDto['reason']
+  ): Promise<void> {
+    if (!this.notificationService) {
+      return;
+    }
+
+    const recipients = await this.db.user.findMany({
+      where: {
+        role: {
+          in: [UserRole.ADMIN, UserRole.MODERATOR]
+        },
+        status: UserStatus.ACTIVE,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        role: true
+      }
+    });
+
+    for (const recipient of recipients) {
+      try {
+        await this.notificationService.notify({
+          userId: recipient.id,
+          type: 'AD_REPORT_CREATED',
+          title: 'Новая жалоба на объявление',
+          body: `Поступила жалоба на объявление "${adTitle}". Причина: ${reason}.`,
+          category: 'ad_status',
+          critical: true,
+          idempotencyKey: `ad-report:${reportId}:recipient:${recipient.id}:created`,
+          deepLink: this.notificationService.buildModerationLink(adId),
+          payload: {
+            reportId,
+            adId,
+            reportedUserId: ownerId,
+            reason,
+            recipientRole: recipient.role.toLowerCase()
+          }
+        });
+      } catch (error) {
+        logger.warn(
+          {
+            err: error,
+            reportId,
+            adId,
+            recipientId: recipient.id
+          },
+          'Ad report notification enqueue failed'
+        );
+      }
+    }
   }
 
   async listForModeration(query: AdReportModerationQuery) {

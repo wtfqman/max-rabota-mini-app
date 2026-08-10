@@ -1222,6 +1222,11 @@ const createdReport = await adReportsService.createReport('reporter-user', {
   comment: 'Suspicious payment request'
 });
 assert.equal(createdReport.report.duplicate, false, 'create report creates first open report');
+assert.equal(
+  adReportsHarness.notifications.some((item) => item.userId === 'moderator-user' && item.type === 'AD_REPORT_CREATED'),
+  true,
+  'new report notifies moderation recipients'
+);
 const duplicateReport = await adReportsService.createReport('reporter-user', {
   adId: 'reported-ad',
   reason: 'SPAM',
@@ -5286,6 +5291,7 @@ function createMemoryAdReportsHarness() {
       'reporter-user',
       {
         id: 'reporter-user',
+        role: UserRole.USER,
         status: UserStatus.ACTIVE,
         deletedAt: null,
         displayName: 'Reporter',
@@ -5297,6 +5303,7 @@ function createMemoryAdReportsHarness() {
       'reported-owner',
       {
         id: 'reported-owner',
+        role: UserRole.USER,
         status: UserStatus.ACTIVE,
         deletedAt: null,
         displayName: 'Owner',
@@ -5308,6 +5315,7 @@ function createMemoryAdReportsHarness() {
       'moderator-user',
       {
         id: 'moderator-user',
+        role: UserRole.MODERATOR,
         status: UserStatus.ACTIVE,
         deletedAt: null,
         displayName: 'Moderator',
@@ -5406,6 +5414,17 @@ function createMemoryAdReportsHarness() {
         }
         return { id: user.id };
       },
+      findMany: async ({ where }: { where: { role?: { in: UserRole[] }; status?: UserStatus; deletedAt?: null } }) =>
+        [...users.values()]
+          .filter((user) =>
+            (!where.role?.in || where.role.in.includes(user.role)) &&
+            (!where.status || user.status === where.status) &&
+            (where.deletedAt !== null || !user.deletedAt)
+          )
+          .map((user) => ({
+            id: user.id,
+            role: user.role
+          })),
       findUnique: async ({ where, select }: { where: { id: string }; select?: Record<string, unknown> }) => {
         const user = users.get(where.id);
         if (!user) {
@@ -5530,6 +5549,10 @@ function createMemoryAdReportsHarness() {
       buildMyAdsLink: () => ({
         label: 'my ads',
         path: '/my-ads'
+      }),
+      buildModerationLink: (adId?: string | null) => ({
+        label: 'moderation',
+        path: adId ? `/moderation?adId=${adId}` : '/moderation'
       })
     }
   };
