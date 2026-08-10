@@ -53,50 +53,30 @@ export class ModerationModuleService extends FoundationService {
 
       if (revision) {
         await this.adRevisionRepository.approvePending(adId, moderatorId);
-        const ad = await this.adService.getAdDetails(adId);
         await this.channelPublishingService.removeAdPublications(adId);
         await this.removeTelegramPublications(adId);
-        const publication = await this.publishAfterApprove(ad);
+        const publishedAd = await this.adService.markAdPublished(adId);
+        const publication = await this.publishAfterApprove(publishedAd);
+        await this.enqueueTelegramPublication(publishedAd.id);
+        await this.notifyApproved(publishedAd, true);
+        await this.enqueueSavedSearchScan(publishedAd.id);
 
-        if (publication.status === 'published') {
-          const publishedAd = await this.adService.markAdPublished(adId);
-          await this.enqueueTelegramPublication(publishedAd.id);
-          await this.notifyApproved(publishedAd, true);
-          await this.enqueueSavedSearchScan(publishedAd.id);
-          return {
-            ad: publishedAd,
-            publication
-          };
-        }
-
-        const refreshed = await this.adService.getAdDetails(adId);
-        await this.notifyApproved(refreshed, false);
         return {
-          ad: refreshed,
+          ad: publishedAd,
           publication
         };
       }
     }
 
     await this.moderationService.approveAd(adId, moderatorId);
-    const ad = await this.adService.getAdDetails(adId);
-    const publication = await this.publishAfterApprove(ad);
+    const publishedAd = await this.adService.markAdPublished(adId);
+    const publication = await this.publishAfterApprove(publishedAd);
+    await this.enqueueTelegramPublication(publishedAd.id);
+    await this.notifyApproved(publishedAd, true);
+    await this.enqueueSavedSearchScan(publishedAd.id);
 
-    if (publication.status === 'published') {
-      const publishedAd = await this.adService.markAdPublished(adId);
-      await this.enqueueTelegramPublication(publishedAd.id);
-      await this.notifyApproved(publishedAd, true);
-      await this.enqueueSavedSearchScan(publishedAd.id);
-      return {
-        ad: publishedAd,
-        publication
-      };
-    }
-
-    const refreshed = await this.adService.getAdDetails(adId);
-    await this.notifyApproved(refreshed, false);
     return {
-      ad: refreshed,
+      ad: publishedAd,
       publication
     };
   }

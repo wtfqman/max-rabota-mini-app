@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Ban, CheckCircle2, Copy, Crown, RefreshCw, Save, Search, ShieldCheck, Sparkles, UserCog, Users } from 'lucide-react';
+import { Ban, CheckCircle2, Copy, Crown, MessageCircle, RefreshCw, Save, Search, Send, ShieldCheck, Sparkles, UserCog, Users } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
 import type { TeamUser } from '../features/ads/ad.types.js';
 import type { PromotionProduct } from '../features/promotions/promotion.types.js';
 import { apiClient } from '../shared/api/client.js';
-import type { AdminAdAnalyticsDashboard } from '../shared/api/client.js';
+import type { AdminAdAnalyticsDashboard, TelegramTargetSettings } from '../shared/api/client.js';
 import { ApiError } from '../shared/api/http.js';
 import { ActionButton } from '../shared/ui/ActionButton.js';
 import { AppPage } from '../shared/ui/AppPage.js';
@@ -28,6 +28,7 @@ export function TeamPage() {
   const currentUser = useAppStore((state) => state.user);
   const analyticsEnabled = useAppStore((state) => state.features.AD_ANALYTICS_ENABLED);
   const promotionsEnabled = useAppStore((state) => state.features.PROMOTIONS_ENABLED);
+  const telegramSyncEnabled = useAppStore((state) => state.features.TELEGRAM_SYNC_ENABLED);
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [users, setUsers] = useState<TeamUser[]>([]);
@@ -195,6 +196,8 @@ export function TeamPage() {
       {analyticsEnabled ? <AdminAnalyticsPanel /> : null}
 
       {promotionsEnabled ? <PromotionAdminPanel /> : null}
+
+      {telegramSyncEnabled ? <TelegramTargetsPanel /> : null}
 
       {message ? (
         <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-4 py-3 text-sm font-semibold leading-6 text-accent-green">
@@ -643,6 +646,202 @@ function PromotionAdminPanel() {
   );
 }
 
+function TelegramTargetsPanel() {
+  const [targets, setTargets] = useState<TelegramTargetSettings[]>([]);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    setStatus('loading');
+    setError(null);
+
+    apiClient
+      .listTelegramTargets()
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+
+        setTargets(response.data);
+        setStatus('ready');
+      })
+      .catch((requestError) => {
+        if (!active) {
+          return;
+        }
+
+        setError(getTeamError(requestError));
+        setStatus('error');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const updateTarget = (target: TelegramTargetSettings) => {
+    setTargets((current) => current.map((item) => (item.id === target.id ? target : item)));
+  };
+
+  const checkAll = async () => {
+    setBusy('all');
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await apiClient.checkTelegramTargets();
+      setTargets(response.data);
+      setMessage('Telegram-каналы проверены.');
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const checkOne = async (target: TelegramTargetSettings) => {
+    setBusy(target.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await apiClient.checkTelegramTarget(target.id);
+      updateTarget(response.data);
+      setMessage(`@${target.username}: права проверены.`);
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const toggleTarget = async (target: TelegramTargetSettings) => {
+    setBusy(target.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await apiClient.setTelegramTargetEnabled(target.id, !target.enabled);
+      updateTarget(response.data);
+      setMessage(`@${target.username}: ${response.data.enabled ? 'публикация включена' : 'публикация выключена'}.`);
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const testTarget = async (target: TelegramTargetSettings) => {
+    setBusy(target.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      await apiClient.testTelegramTarget(target.id, 'text');
+      setMessage(`@${target.username}: тестовый пост отправлен.`);
+    } catch (requestError) {
+      setError(getTeamError(requestError));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const readyCount = targets.filter((target) => target.status === 'READY').length;
+  const enabledCount = targets.filter((target) => target.enabled && target.publishEnabled).length;
+
+  return (
+    <SectionCard title="Telegram-каналы" description="После одобрения объявление публикуется в Mini App, MAX-канале и во включённых Telegram-каналах. При скрытии или удалении Telegram-посты удаляются автоматически.">
+      <div className="grid gap-3">
+        <div className="flex flex-wrap gap-2">
+          <StatChip label="готовы" value={String(readyCount)} tone="green" icon={<MessageCircle size={14} />} />
+          <StatChip label="включены" value={String(enabledCount)} />
+          <StatChip label="всего" value={String(targets.length)} />
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <ActionButton icon={<RefreshCw size={18} />} variant="secondary" onClick={() => setReloadKey((value) => value + 1)}>
+            Обновить
+          </ActionButton>
+          <ActionButton icon={<CheckCircle2 size={18} />} disabled={busy === 'all'} onClick={() => void checkAll()}>
+            Проверить
+          </ActionButton>
+        </div>
+
+        {message ? <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">{message}</p> : null}
+        {error ? <p className="rounded-panel border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">{error}</p> : null}
+        {status === 'loading' ? <LoadingState /> : null}
+        {status === 'error' ? <EmptyState title="Не удалось загрузить Telegram-каналы" description={error ?? 'Проверьте настройки Telegram sync.'} /> : null}
+
+        {status === 'ready' ? (
+          <div className="grid gap-3">
+            {targets.map((target) => (
+              <article key={target.id} className="rounded-panel border border-white/10 bg-surface-950/50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black text-text-primary">@{target.username}</p>
+                    <p className="mt-1 text-xs font-bold text-text-secondary">
+                      {target.title ?? target.type}
+                      {target.chatId ? ` · ${target.chatId}` : ' · chat_id не найден'}
+                      {target.messageThreadId ? ` · topic ${target.messageThreadId}` : ''}
+                    </p>
+                  </div>
+                  <StatChip label={getTelegramTargetStatusLabel(target.status)} tone={target.status === 'READY' ? 'green' : 'neutral'} />
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatChip label={target.enabled ? 'включён' : 'выключен'} tone={target.enabled ? 'green' : 'neutral'} />
+                  <StatChip label={target.publishEnabled ? 'публикация' : 'без публикации'} tone={target.publishEnabled ? 'green' : 'neutral'} />
+                  <StatChip label={target.botIsAdmin ? 'бот админ' : 'бот не админ'} tone={target.botIsAdmin ? 'green' : 'neutral'} />
+                  <StatChip label={target.canPostMessages ? 'может писать' : 'нет прав писать'} tone={target.canPostMessages ? 'green' : 'neutral'} />
+                  {target.testTarget ? <StatChip label="test" /> : null}
+                </div>
+
+                {target.lastError ? <p className="mt-3 rounded-panel border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-100">{target.lastError}</p> : null}
+
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <ActionButton
+                    className="min-h-10 px-2 text-xs"
+                    type="button"
+                    variant="secondary"
+                    icon={<RefreshCw size={15} />}
+                    disabled={busy === target.id}
+                    onClick={() => void checkOne(target)}
+                  >
+                    Проверить
+                  </ActionButton>
+                  <ActionButton
+                    className="min-h-10 px-2 text-xs"
+                    type="button"
+                    variant={target.enabled ? 'danger' : 'primary'}
+                    disabled={busy === target.id || (!target.enabled && !target.chatId)}
+                    onClick={() => void toggleTarget(target)}
+                  >
+                    {target.enabled ? 'Выключить' : 'Включить'}
+                  </ActionButton>
+                  <ActionButton
+                    className="min-h-10 px-2 text-xs"
+                    type="button"
+                    variant="secondary"
+                    icon={<Send size={15} />}
+                    disabled={busy === target.id || !target.testTarget}
+                    onClick={() => void testTarget(target)}
+                  >
+                    Тест
+                  </ActionButton>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
+}
+
 function RoleChip({ role }: { role: TeamRole }) {
   if (role === 'admin') {
     return <StatChip label="Админ" tone="green" icon={<Crown size={14} />} />;
@@ -705,6 +904,20 @@ function promotionProductAdminLabel(type: PromotionProduct['type']): string {
   };
 
   return labels[type];
+}
+
+function getTelegramTargetStatusLabel(status: TelegramTargetSettings['status']): string {
+  const labels: Record<TelegramTargetSettings['status'], string> = {
+    READY: 'готов',
+    NOT_ADDED: 'бот не добавлен',
+    NO_PERMISSION: 'нет прав',
+    UNAVAILABLE: 'недоступен',
+    DISABLED: 'выключен',
+    TESTING: 'проверка',
+    ERROR: 'ошибка'
+  };
+
+  return labels[status];
 }
 
 function getStatusLabel(status: TeamUser['status']): string {

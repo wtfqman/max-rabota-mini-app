@@ -117,6 +117,31 @@ export interface AdminAdAnalyticsDashboard {
   }>;
 }
 
+export interface TelegramTargetSettings {
+  id: string;
+  username: string;
+  chatId: string | null;
+  messageThreadId: string | null;
+  title: string | null;
+  type: 'CHANNEL' | 'GROUP' | 'SUPERGROUP';
+  status: 'READY' | 'NOT_ADDED' | 'NO_PERMISSION' | 'UNAVAILABLE' | 'DISABLED' | 'TESTING' | 'ERROR';
+  enabled: boolean;
+  testTarget: boolean;
+  publishEnabled: boolean;
+  editEnabled: boolean;
+  deleteEnabled: boolean;
+  botIsMember: boolean;
+  botIsAdmin: boolean;
+  canPostMessages: boolean;
+  canEditMessages: boolean;
+  canDeleteMessages: boolean;
+  canSendMediaMessages: boolean;
+  canManageTopics: boolean;
+  lastPermissionCheckAt: string | null;
+  lastSuccessfulPublishAt: string | null;
+  lastError: string | null;
+}
+
 export interface ApiEnvelope<T, TMeta = Record<string, unknown>> {
   data: T;
   meta?: TMeta;
@@ -474,6 +499,31 @@ export const apiClient = {
     apiRequest<ApiEnvelope<PromotionProduct>>(`/promotions/admin/products/${encodeURIComponent(productType)}`, {
       method: 'PUT',
       body: JSON.stringify(payload)
+    }),
+  listTelegramTargets: () =>
+    apiRequest<ApiEnvelope<TelegramTargetSettings[]>>('/telegram-sync/targets'),
+  checkTelegramTargets: () =>
+    apiRequest<ApiEnvelope<TelegramTargetSettings[]>>('/telegram-sync/targets/check-all', {
+      method: 'POST',
+      body: JSON.stringify({})
+    }),
+  checkTelegramTarget: (targetId: string) =>
+    apiRequest<ApiEnvelope<TelegramTargetSettings>>(`/telegram-sync/targets/${encodeURIComponent(targetId)}/check`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    }),
+  setTelegramTargetEnabled: (targetId: string, enabled: boolean) =>
+    apiRequest<ApiEnvelope<TelegramTargetSettings>>(
+      `/telegram-sync/targets/${encodeURIComponent(targetId)}/${enabled ? 'enable' : 'disable'}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({})
+      }
+    ),
+  testTelegramTarget: (targetId: string, kind: 'text' | 'photo' | 'video' | 'album' = 'text') =>
+    apiRequest<ApiEnvelope<unknown>>(`/telegram-sync/targets/${encodeURIComponent(targetId)}/test-publish`, {
+      method: 'POST',
+      body: JSON.stringify({ kind })
     }),
   listFavorites: () => apiRequest<ApiEnvelope<FavoriteItem[]>>('/favorites'),
   addFavorite: (adId: string) =>

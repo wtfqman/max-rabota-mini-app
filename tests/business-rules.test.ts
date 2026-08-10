@@ -1441,6 +1441,7 @@ assert.equal(
 const approvedRevisionModeration = await runRevisionModerationScenario('approve');
 assert.equal(approvedRevisionModeration.ad.title, 'Approved revision title', 'approving revision atomically replaces live content');
 assert.equal(approvedRevisionModeration.revision.status, 'APPROVED', 'approved revision is stored in history');
+assert.equal(approvedRevisionModeration.telegramEnqueues, 1, 'approving revision enqueues Telegram publication independently from MAX result');
 
 const oldAdOpenFlow = await runAdRevisionSubmitScenario({
   type: AdType.VACANCY,
@@ -3266,6 +3267,7 @@ async function runAdRevisionSubmitScenario(input: {
 async function runRevisionModerationScenario(action: 'approve' | 'reject') {
   const ad = createRevisionScenarioAd(AdType.VACANCY, AdStatus.PUBLISHED);
   ad.title = 'Live published title';
+  let telegramEnqueues = 0;
   const revision = createRevisionRecord({
     status: 'PENDING_MODERATION',
     mediaChanged: false,
@@ -3319,7 +3321,15 @@ async function runRevisionModerationScenario(action: 'approve' | 'reject') {
         revision.rejectedAt = new Date();
         return revision;
       }
-    } as unknown as ConstructorParameters<typeof ModerationModuleService>[6]
+    } as unknown as ConstructorParameters<typeof ModerationModuleService>[6],
+    undefined,
+    undefined,
+    {
+      enqueuePublicationForAd: async () => {
+        telegramEnqueues += 1;
+      },
+      removePublicationsForAd: async () => ({ attempted: 0, deleted: 0, failed: 0, skipped: 0 })
+    }
   );
 
   const result =
@@ -3329,7 +3339,8 @@ async function runRevisionModerationScenario(action: 'approve' | 'reject') {
 
   return {
     ...result,
-    revision
+    revision,
+    telegramEnqueues
   };
 }
 
