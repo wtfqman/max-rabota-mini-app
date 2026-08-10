@@ -325,7 +325,7 @@ export class AdRepository {
     const perPage = query.perPage;
     const offset = (page - 1) * perPage;
 
-    const pageItems = await this.db.ad.findMany({
+    const pageQuery = this.db.ad.findMany({
       where,
       include: adWithDetailsInclude,
       orderBy: [
@@ -351,9 +351,13 @@ export class AdRepository {
       skip: offset,
       take: perPage + 1
     });
+    const shouldCountExactTotal = forcedType === 'vacancy';
+    const [pageItems, exactTotal] = shouldCountExactTotal
+      ? await this.db.$transaction([pageQuery, this.db.ad.count({ where })])
+      : [await pageQuery, null];
     const hasMore = pageItems.length > perPage;
     const items = hasMore ? pageItems.slice(0, perPage) : pageItems;
-    const total = offset + items.length + (hasMore ? 1 : 0);
+    const total = exactTotal ?? offset + items.length + (hasMore ? 1 : 0);
 
     return {
       items,
