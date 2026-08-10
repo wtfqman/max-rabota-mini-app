@@ -38,7 +38,7 @@ const sections = [
 export function HomePage() {
   return (
     <AppPage className="space-y-2.5">
-      <section className="app-surface app-topline overflow-hidden rounded-panel p-2.5 shadow-glow app-fade-up">
+      <section className="app-surface overflow-hidden rounded-panel p-2.5 shadow-glow app-fade-up">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-[22px] font-black leading-[1.02] text-text-primary min-[380px]:text-[24px]">

@@ -128,6 +128,58 @@ img {
   animation: soft-shimmer 1.35s ease-in-out infinite;
 }
 
+.home-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(52, 211, 153, 0.2), transparent 34%),
+    linear-gradient(180deg, #07100d 0%, #030504 100%);
+  animation: home-splash-out 3000ms ease both;
+}
+
+.home-splash__logo {
+  position: relative;
+  display: flex;
+  width: min(42vw, 168px);
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 3px solid #34d399;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(52, 211, 153, 0.18), transparent 34%),
+    #07100d;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 48px rgba(52, 211, 153, 0.34),
+    inset 0 0 28px rgba(52, 211, 153, 0.1);
+  color: #f4fff9;
+  font-size: clamp(13px, 4vw, 17px);
+  font-weight: 900;
+  line-height: 0.95;
+  text-align: center;
+  text-transform: uppercase;
+  animation: home-logo-rise 1200ms cubic-bezier(0.18, 0.9, 0.24, 1.16) both, home-logo-pulse 1600ms ease-in-out 900ms infinite;
+}
+
+.home-splash__logo::before,
+.home-splash__logo::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: inherit;
+  animation: home-logo-ring 1800ms ease-out infinite;
+}
+
+.home-splash__logo::after {
+  animation-delay: 650ms;
+}
+
 @keyframes app-fade-in {
   from {
     opacity: 0;
@@ -153,5 +205,51 @@ img {
 @keyframes soft-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes home-splash-out {
+  0%,
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes home-logo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.82);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes home-logo-pulse {
+  50% {
+    transform: scale(1.035);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 0 64px rgba(52, 211, 153, 0.46),
+      inset 0 0 34px rgba(52, 211, 153, 0.14);
+  }
+}
+
+@keyframes home-logo-ring {
+  from {
+    opacity: 0.7;
+    transform: scale(0.86);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.35);
   }
 }
