@@ -63,7 +63,7 @@ export function SaveSearchButton({ adType, query, defaultName }: SaveSearchButto
       {open ? (
         <div className="fixed inset-0 z-[170] bg-surface-950/82 backdrop-blur-sm" role="dialog" aria-modal="true">
           <button className="absolute inset-0 h-full w-full cursor-default" type="button" aria-label="Закрыть" onClick={() => setOpen(false)} />
-          <div className="app-fade-up absolute inset-x-3 top-24 mx-auto grid max-w-md gap-4 rounded-panel border border-white/10 bg-surface-900 p-4 shadow-panel">
+          <div className="app-fade-up absolute inset-x-3 bottom-[calc(90px_+_env(safe-area-inset-bottom))] mx-auto grid max-h-[calc(100dvh_-_120px_-_env(safe-area-inset-bottom))] max-w-md gap-4 overflow-y-auto rounded-panel border border-white/10 bg-surface-900 p-4 shadow-panel">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-extrabold uppercase text-accent-green">Подписка</p>
