@@ -106,8 +106,8 @@ type NotificationWithDeliveries = Notification & {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PUBLICATION_WINDOW_MS = 7 * DAY_MS;
 const LOW_PUBLICATION_BALANCE_THRESHOLD = 1;
-const LOW_PUBLICATION_BALANCE_LOOKBACK_MS = 25 * DAY_MS;
-const SCHEDULED_NOTIFICATION_BATCH_SIZE = 50;
+const LOW_PUBLICATION_BALANCE_LOOKBACK_MS = 2 * DAY_MS;
+const SCHEDULED_NOTIFICATION_BATCH_SIZE = 1;
 
 export class NotificationService {
   constructor(
@@ -224,6 +224,9 @@ export class NotificationService {
           ...notification,
           deliveries
         };
+      }, {
+        maxWait: 10_000,
+        timeout: 20_000
       });
 
       await this.enqueuePendingMaxDelivery(created);
@@ -516,10 +519,16 @@ export class NotificationService {
     publicationExpiring: number;
     lowPublicationBalance: number;
   }> {
-    const [publicationExpiring, lowPublicationBalance] = await Promise.all([
-      this.notifyPublicationExpiring(now),
-      this.notifyLowPublicationBalances(now)
-    ]);
+    const publicationExpiring = await this.notifyPublicationExpiring(now);
+
+    if (publicationExpiring > 0) {
+      return {
+        publicationExpiring,
+        lowPublicationBalance: 0
+      };
+    }
+
+    const lowPublicationBalance = await this.notifyLowPublicationBalances(now);
 
     return {
       publicationExpiring,
