@@ -30,6 +30,11 @@ export class TelegramAdminHandler {
   }
 
   private async handleRegisterChat(ctx: Context): Promise<void> {
+    if (this.isTestChannelCommand(ctx, '/register_chat')) {
+      await this.registerCurrentChat(ctx);
+      return;
+    }
+
     if (!(await requireTelegramAdmin(ctx))) {
       return;
     }
@@ -38,6 +43,16 @@ export class TelegramAdminHandler {
   }
 
   private async handleCheckPermissions(ctx: Context): Promise<void> {
+    if (this.isTestChannelCommand(ctx, '/check_permissions')) {
+      const target = await this.findCurrentOrRequestedTarget(ctx);
+
+      if (target) {
+        await this.publicationService.checkTargetPermissions(target);
+      }
+
+      return;
+    }
+
     if (!(await requireTelegramAdmin(ctx))) {
       return;
     }
@@ -65,6 +80,16 @@ export class TelegramAdminHandler {
   }
 
   private async handleTestPublish(ctx: Context): Promise<void> {
+    if (this.isTestChannelCommand(ctx, '/test_publish')) {
+      const target = await this.findCurrentOrRequestedTarget(ctx);
+
+      if (target) {
+        await this.publicationService.sendTestPost(target, this.getTestKind(ctx.channelPost?.text));
+      }
+
+      return;
+    }
+
     if (!(await requireTelegramAdmin(ctx))) {
       return;
     }
@@ -182,6 +207,10 @@ export class TelegramAdminHandler {
 
   private getMessageThreadId(ctx: Context): number | undefined {
     return ctx.message?.message_thread_id ?? ctx.channelPost?.message_thread_id;
+  }
+
+  private isTestChannelCommand(ctx: Context, command: string): boolean {
+    return config.features.TELEGRAM_TEST_MODE && ctx.channelPost?.text?.trim().startsWith(command) === true;
   }
 
   private toTargetType(type: string): TelegramTargetType {
