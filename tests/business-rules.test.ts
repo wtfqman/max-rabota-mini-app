@@ -470,6 +470,25 @@ const duplicateJobSecond = await outboxService.enqueue({
 assert.equal(duplicateJobSecond.id, duplicateJobFirst.id, 'duplicate outbox idempotency key returns existing job');
 assert.equal(memoryOutbox.jobs.length, 1, 'duplicate outbox idempotency key does not create second job');
 
+memoryOutbox.jobs[0].status = OUTBOX_JOB_STATUS.FAILED;
+memoryOutbox.jobs[0].attempts = 5;
+memoryOutbox.jobs[0].lastError = 'old failure';
+memoryOutbox.jobs[0].completedAt = new Date('2026-07-31T08:00:00.000Z');
+
+const revivedJob = await outboxService.enqueue({
+  type: 'NOOP',
+  payload: {
+    source: 'test'
+  },
+  idempotencyKey: 'duplicate-outbox-key',
+  reviveTerminal: true
+});
+
+assert.equal(revivedJob.id, duplicateJobFirst.id, 'terminal outbox job is revived without creating a duplicate');
+assert.equal(revivedJob.status, OUTBOX_JOB_STATUS.PENDING, 'revived outbox job returns to pending');
+assert.equal(revivedJob.attempts, 0, 'revived outbox job resets attempts');
+assert.equal(revivedJob.lastError, null, 'revived outbox job clears last error');
+
 const retryOutbox = createMemoryOutboxRepository();
 const retryService = new OutboxService(retryOutbox.repository, {
   lockTimeoutMs: 60_000
@@ -3508,6 +3527,19 @@ function createMemoryOutboxRepository(): {
       },
       async findByIdempotencyKey(idempotencyKey: string) {
         return jobs.find((job) => job.idempotencyKey === idempotencyKey) ?? null;
+      },
+      async requeue(id: string, nextAttemptAt: Date, now: Date) {
+        const job = findMemoryOutboxJob(jobs, id);
+        job.status = OUTBOX_JOB_STATUS.PENDING;
+        job.attempts = 0;
+        job.nextAttemptAt = nextAttemptAt;
+        job.lockedAt = null;
+        job.lockedBy = null;
+        job.completedAt = null;
+        job.lastError = null;
+        job.resultJson = null;
+
+        return touch(job, now);
       },
       async claimNext(input) {
         const candidate = jobs.find((job) => {

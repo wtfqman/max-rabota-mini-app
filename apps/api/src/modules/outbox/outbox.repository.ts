@@ -45,6 +45,7 @@ export interface OutboxJobClaimInput {
 export interface OutboxJobRepositoryLike {
   create(input: OutboxJobCreateInput): Promise<OutboxJobRecord>;
   findByIdempotencyKey(idempotencyKey: string): Promise<OutboxJobRecord | null>;
+  requeue(id: string, nextAttemptAt: Date, now: Date): Promise<OutboxJobRecord>;
   claimNext(input: OutboxJobClaimInput): Promise<OutboxJobRecord | null>;
   complete(id: string, resultJson: string | null, now: Date): Promise<OutboxJobRecord>;
   retryOrFail(id: string, lastError: string, nextAttemptAt: Date, now: Date): Promise<OutboxJobRecord>;
@@ -70,6 +71,25 @@ export class OutboxRepository implements OutboxJobRepositoryLike {
     return this.client().outboxJob.findUnique({
       where: {
         idempotencyKey
+      }
+    });
+  }
+
+  requeue(id: string, nextAttemptAt: Date, now: Date): Promise<OutboxJobRecord> {
+    return this.client().outboxJob.update({
+      where: {
+        id
+      },
+      data: {
+        status: OUTBOX_JOB_STATUS.PENDING,
+        attempts: 0,
+        nextAttemptAt,
+        lockedAt: null,
+        lockedBy: null,
+        completedAt: null,
+        lastError: null,
+        resultJson: null,
+        updatedAt: now
       }
     });
   }

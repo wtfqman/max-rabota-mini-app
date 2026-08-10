@@ -247,7 +247,9 @@ export class NotificationService {
 
   private async enqueuePendingMaxDelivery(notification: NotificationWithDeliveries): Promise<void> {
     const maxDelivery = notification.deliveries.find(
-      (delivery) => delivery.channel === NotificationDeliveryChannel.MAX && delivery.status === NotificationDeliveryStatus.PENDING
+      (delivery) =>
+        delivery.channel === NotificationDeliveryChannel.MAX &&
+        (delivery.status === NotificationDeliveryStatus.PENDING || delivery.status === NotificationDeliveryStatus.FAILED)
     );
 
     if (!maxDelivery) {
@@ -261,7 +263,8 @@ export class NotificationService {
         deliveryId: maxDelivery.id
       },
       idempotencyKey: `notification:max:${notification.id}`,
-      maxAttempts: 5
+      maxAttempts: 5,
+      reviveTerminal: true
     });
   }
 
@@ -729,7 +732,29 @@ export class NotificationService {
 
   private sanitizeError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error);
-    return message.replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]').slice(0, 1000);
+    const parts = [message];
+
+    if (error instanceof AppError) {
+      parts.push(`status=${error.statusCode}`);
+
+      if (error.details !== undefined) {
+        parts.push(`details=${this.safeStringify(error.details)}`);
+      }
+    }
+
+    return this.redact(parts.join(' | ')).slice(0, 1000);
+  }
+
+  private safeStringify(value: unknown): string {
+    try {
+      return typeof value === 'string' ? value : JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private redact(value: string): string {
+    return value.replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
   }
 
   private isUniqueConstraintError(error: unknown): boolean {

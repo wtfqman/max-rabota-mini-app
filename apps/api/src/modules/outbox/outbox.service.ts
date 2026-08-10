@@ -2,6 +2,7 @@ import { logger } from '@rabst24/config';
 import { AppError } from '@rabst24/shared';
 import {
   isPrismaUniqueConstraintError,
+  OUTBOX_JOB_STATUS,
   type OutboxJobRecord,
   type OutboxJobRepositoryLike
 } from './outbox.repository.js';
@@ -13,6 +14,7 @@ export interface EnqueueOutboxJobInput {
   idempotencyKey: string;
   maxAttempts?: number;
   nextAttemptAt?: Date;
+  reviveTerminal?: boolean;
 }
 
 export interface ClaimedOutboxJob {
@@ -45,6 +47,13 @@ export class OutboxService {
     const existing = await this.repository.findByIdempotencyKey(idempotencyKey);
 
     if (existing) {
+      if (
+        input.reviveTerminal &&
+        (existing.status === OUTBOX_JOB_STATUS.FAILED || existing.status === OUTBOX_JOB_STATUS.CANCELLED)
+      ) {
+        return this.repository.requeue(existing.id, input.nextAttemptAt ?? new Date(), new Date());
+      }
+
       return existing;
     }
 
@@ -158,6 +167,28 @@ export class OutboxService {
 
   private sanitizeError(error: unknown): string {
     const message = error instanceof Error ? error.message : String(error);
-    return message.replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]').slice(0, 1000);
+    const parts = [message];
+
+    if (error instanceof AppError) {
+      parts.push(`status=${error.statusCode}`);
+
+      if (error.details !== undefined) {
+        parts.push(`details=${this.safeStringify(error.details)}`);
+      }
+    }
+
+    return this.redact(parts.join(' | ')).slice(0, 1000);
+  }
+
+  private safeStringify(value: unknown): string {
+    try {
+      return typeof value === 'string' ? value : JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private redact(value: string): string {
+    return value.replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
   }
 }
