@@ -77,8 +77,8 @@ export function AdFiltersDrawer({
         onClick={onClose}
       />
 
-      <div className="app-fade-up absolute inset-x-0 bottom-0 mx-auto max-h-[calc(100dvh-18px)] max-w-2xl overflow-hidden rounded-t-[28px] border border-white/10 bg-surface-900 shadow-panel">
-        <div className="flex items-start justify-between gap-3 border-b border-white/8 px-4 pb-3 pt-4">
+      <div className="app-fade-up absolute inset-x-0 bottom-[calc(90px_+_env(safe-area-inset-bottom))] mx-auto flex max-h-[calc(100dvh_-_112px_-_env(safe-area-inset-bottom))] max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-white/10 bg-surface-900 shadow-panel">
+        <div className="shrink-0 flex items-start justify-between gap-3 border-b border-white/8 px-4 pb-3 pt-4">
           <div className="space-y-1">
             <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-accent-green">Фильтры</p>
             <h2 className="text-xl font-black text-text-primary">{copy.title}</h2>
@@ -87,8 +87,8 @@ export function AdFiltersDrawer({
           <ActionButton variant="quiet" aria-label="Закрыть" icon={<X size={20} />} onClick={onClose} />
         </div>
 
-        <form className="flex max-h-[calc(100dvh-132px)] flex-col" onSubmit={handleSubmit}>
-          <div className="grid gap-4 overflow-y-auto px-4 pb-[calc(118px+env(safe-area-inset-bottom))] pt-4">
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
+          <div className="grid min-h-0 gap-4 overflow-y-auto px-4 pb-4 pt-4">
             <SuggestionInput
               name="category"
               label={copy.categoryLabel}
@@ -118,7 +118,7 @@ export function AdFiltersDrawer({
             </div>
           </div>
 
-          <div className="sticky bottom-0 grid grid-cols-[1fr_auto] gap-2 border-t border-white/8 bg-surface-900/96 px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] backdrop-blur">
+          <div className="shrink-0 grid grid-cols-[1fr_auto] gap-2 border-t border-white/8 bg-surface-900/96 px-4 pb-3 pt-3 backdrop-blur">
             <ActionButton type="submit">{copy.submitLabel}</ActionButton>
             <ActionButton type="button" variant="secondary" onClick={onReset}>
               Сбросить

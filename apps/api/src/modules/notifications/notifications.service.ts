@@ -132,6 +132,7 @@ export class NotificationService {
     });
 
     if (existing) {
+      await this.enqueuePendingMaxDelivery(existing);
       return this.toDto(existing);
     }
 
@@ -218,21 +219,7 @@ export class NotificationService {
         };
       });
 
-      const maxDelivery = created.deliveries.find(
-        (delivery) => delivery.channel === NotificationDeliveryChannel.MAX && delivery.status === NotificationDeliveryStatus.PENDING
-      );
-
-      if (maxDelivery) {
-        await this.outboxService.enqueue({
-          type: 'MAX_NOTIFICATION',
-          payload: {
-            notificationId: created.id,
-            deliveryId: maxDelivery.id
-          },
-          idempotencyKey: `notification:max:${created.id}`,
-          maxAttempts: 5
-        });
-      }
+      await this.enqueuePendingMaxDelivery(created);
 
       return this.toDto(created);
     } catch (error) {
@@ -246,11 +233,36 @@ export class NotificationService {
           }
         });
 
-        return raced ? this.toDto(raced) : null;
+        if (raced) {
+          await this.enqueuePendingMaxDelivery(raced);
+          return this.toDto(raced);
+        }
+
+        return null;
       }
 
       throw error;
     }
+  }
+
+  private async enqueuePendingMaxDelivery(notification: NotificationWithDeliveries): Promise<void> {
+    const maxDelivery = notification.deliveries.find(
+      (delivery) => delivery.channel === NotificationDeliveryChannel.MAX && delivery.status === NotificationDeliveryStatus.PENDING
+    );
+
+    if (!maxDelivery) {
+      return;
+    }
+
+    await this.outboxService.enqueue({
+      type: 'MAX_NOTIFICATION',
+      payload: {
+        notificationId: notification.id,
+        deliveryId: maxDelivery.id
+      },
+      idempotencyKey: `notification:max:${notification.id}`,
+      maxAttempts: 5
+    });
   }
 
   async handleMaxNotificationJob(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
