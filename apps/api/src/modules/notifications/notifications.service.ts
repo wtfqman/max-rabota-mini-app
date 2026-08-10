@@ -1,5 +1,6 @@
 import { logger } from '@rabst24/config';
 import {
+  AdStatus,
   NotificationDeliveryChannel,
   NotificationDeliveryStatus,
   Prisma,
@@ -101,6 +102,10 @@ export interface NotificationPreferencesDto {
 type NotificationWithDeliveries = Notification & {
   deliveries: NotificationDelivery[];
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_PUBLICATION_WINDOW_MS = 7 * DAY_MS;
+const LOW_PUBLICATION_BALANCE_THRESHOLD = 1;
 
 export class NotificationService {
   constructor(
@@ -505,6 +510,21 @@ export class NotificationService {
     };
   }
 
+  async enqueueScheduledUserNotifications(now = new Date()): Promise<{
+    publicationExpiring: number;
+    lowPublicationBalance: number;
+  }> {
+    const [publicationExpiring, lowPublicationBalance] = await Promise.all([
+      this.notifyPublicationExpiring(now),
+      this.notifyLowPublicationBalances(now)
+    ]);
+
+    return {
+      publicationExpiring,
+      lowPublicationBalance
+    };
+  }
+
   async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
     const preferences = await this.db.notificationPreference.upsert({
       where: {
@@ -574,6 +594,150 @@ export class NotificationService {
       path: adId ? `/moderation?adId=${encodeURIComponent(adId)}` : '/moderation',
       startParam: adId ? `moderation_${adId}` : 'moderation'
     };
+  }
+
+  private async notifyPublicationExpiring(now: Date): Promise<number> {
+    const remindUntil = new Date(now.getTime() + DAY_MS);
+    const syntheticPublishedFrom = new Date(now.getTime() - DEFAULT_PUBLICATION_WINDOW_MS);
+    const syntheticPublishedTo = new Date(remindUntil.getTime() - DEFAULT_PUBLICATION_WINDOW_MS);
+    const ads = await this.db.ad.findMany({
+      where: {
+        status: AdStatus.PUBLISHED,
+        deletedAt: null,
+        publishedAt: {
+          not: null
+        },
+        OR: [
+          {
+            expiresAt: {
+              gt: now,
+              lte: remindUntil
+            }
+          },
+          {
+            expiresAt: null,
+            publishedAt: {
+              gte: syntheticPublishedFrom,
+              lte: syntheticPublishedTo
+            }
+          }
+        ]
+      },
+      select: {
+        id: true,
+        ownerId: true,
+        type: true,
+        title: true,
+        publishedAt: true,
+        expiresAt: true,
+        metadataJson: true
+      },
+      take: 500,
+      orderBy: {
+        publishedAt: 'asc'
+      }
+    });
+
+    let notified = 0;
+
+    for (const ad of ads) {
+      if (!ad.publishedAt || !this.shouldRemindBeforePublicationEnd(ad.metadataJson)) {
+        continue;
+      }
+
+      const endsAt = ad.expiresAt ?? new Date(ad.publishedAt.getTime() + DEFAULT_PUBLICATION_WINDOW_MS);
+
+      if (endsAt <= now || endsAt > remindUntil) {
+        continue;
+      }
+
+      const notification = await this.notify({
+        userId: ad.ownerId,
+        type: 'PUBLICATION_EXPIRING',
+        title: 'Публикация скоро закончится',
+        body: `Объявление «${ad.title}» перестанет показываться ${this.formatRuDateTime(endsAt)}.`,
+        category: 'ad_status',
+        critical: true,
+        idempotencyKey: `ad:${ad.id}:publication-expiring:${this.formatDateKey(endsAt)}`,
+        deepLink: this.buildAdLink(ad.id, ad.type),
+        payload: {
+          adId: ad.id,
+          endsAt: endsAt.toISOString()
+        }
+      });
+
+      if (notification) {
+        notified += 1;
+      }
+    }
+
+    return notified;
+  }
+
+  private async notifyLowPublicationBalances(now: Date): Promise<number> {
+    const balances = await this.db.userVacancyPublicationBalance.findMany({
+      where: {
+        remaining: {
+          lte: LOW_PUBLICATION_BALANCE_THRESHOLD
+        },
+        user: {
+          status: UserStatus.ACTIVE
+        },
+        OR: [
+          {
+            purchased: {
+              gt: 0
+            }
+          },
+          {
+            bonus: {
+              gt: 0
+            }
+          },
+          {
+            used: {
+              gt: 0
+            }
+          }
+        ]
+      },
+      select: {
+        userId: true,
+        remaining: true
+      },
+      take: 500,
+      orderBy: {
+        userId: 'asc'
+      }
+    });
+
+    let notified = 0;
+    const dateKey = this.formatDateKey(now);
+
+    for (const balance of balances) {
+      const notification = await this.notify({
+        userId: balance.userId,
+        type: 'LOW_PUBLICATION_BALANCE',
+        title: 'На балансе мало публикаций',
+        body:
+          balance.remaining > 0
+            ? `Осталось публикаций: ${balance.remaining}. Пополните баланс заранее, чтобы новые вакансии не остановились.`
+            : 'Публикации закончились. Пополните баланс, чтобы размещать новые вакансии без паузы.',
+        category: 'payments',
+        critical: true,
+        idempotencyKey: `vacancy-publication-balance:${balance.userId}:low:${dateKey}:${balance.remaining}`,
+        deepLink: this.buildProfileLink(),
+        payload: {
+          remaining: balance.remaining
+        }
+      });
+
+      if (notification) {
+        notified += 1;
+      }
+    }
+
+    return notified;
   }
 
   private async markDeliverySkipped(deliveryId: string, reason: string): Promise<void> {
@@ -768,6 +932,43 @@ export class NotificationService {
 
   private isPermanentMaxDeliveryError(error: unknown): boolean {
     return error instanceof AppError && (error.statusCode === 403 || error.statusCode === 404);
+  }
+
+  private shouldRemindBeforePublicationEnd(metadataJson: string | null): boolean {
+    if (!metadataJson) {
+      return true;
+    }
+
+    try {
+      const metadata = JSON.parse(metadataJson) as unknown;
+
+      if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+        return true;
+      }
+
+      const publicationSettings = (metadata as Record<string, unknown>).publicationSettings;
+
+      if (!publicationSettings || typeof publicationSettings !== 'object' || Array.isArray(publicationSettings)) {
+        return true;
+      }
+
+      return (publicationSettings as Record<string, unknown>).remindBeforeEnd !== false;
+    } catch {
+      return true;
+    }
+  }
+
+  private formatDateKey(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  private formatRuDateTime(date: Date): string {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   }
 
   private isUniqueConstraintError(error: unknown): boolean {

@@ -62,6 +62,17 @@ export async function bootstrap(): Promise<void> {
   promotionMaintenanceTimer.unref();
   runPromotionMaintenance();
 
+  const runNotificationMaintenance = (): void => {
+    void container.notificationService.enqueueScheduledUserNotifications().then((result) => {
+      logger.info(result, 'Scheduled user notifications checked');
+    }).catch((error) => {
+      logger.warn({ err: error }, 'Scheduled user notification check failed');
+    });
+  };
+  const notificationMaintenanceTimer = setInterval(runNotificationMaintenance, 60 * 60 * 1000);
+  notificationMaintenanceTimer.unref();
+  runNotificationMaintenance();
+
   const server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
     const httpServer = app.listen(config.port, () => {
       logger.info({ port: config.port }, 'API server started');
@@ -76,6 +87,7 @@ export async function bootstrap(): Promise<void> {
     clearInterval(paymentReconcileTimer);
     clearInterval(savedSearchDigestTimer);
     clearInterval(promotionMaintenanceTimer);
+    clearInterval(notificationMaintenanceTimer);
     container.outboxWorker.stop();
 
     server.close(async (error) => {
