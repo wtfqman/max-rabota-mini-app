@@ -34,6 +34,7 @@ import {
   getPaymentPurposeEffects,
   normalizePaymentPurpose,
   requiresAdPayment,
+  ExternalApiError,
   type CreateAdDto
 } from '@rabst24/shared';
 import { AdPaymentService } from '../apps/api/src/modules/payments/ad-payment.service.js';
@@ -682,6 +683,52 @@ assert.equal(
   ),
   true,
   'missing MAX ID delivery is skipped without failing event creation'
+);
+
+const unavailableMaxDialogHarness = createMemoryNotificationHarness();
+const unavailableMaxDialogOutbox = createMemoryOutboxRepository();
+const unavailableMaxDialogOutboxService = new OutboxService(unavailableMaxDialogOutbox.repository, {
+  lockTimeoutMs: 60_000
+});
+const unavailableMaxDialogService = new NotificationService(
+  unavailableMaxDialogHarness.db,
+  unavailableMaxDialogOutboxService,
+  {
+    sendMessage: async () => {
+      throw new ExternalApiError('MAX API request failed', 404, {
+        code: 'dialog.not.found',
+        message: 'Dialog not found'
+      });
+    }
+  } as never,
+  {
+    miniAppUrl: 'https://app.example.test',
+    miniAppWebApp: 'https://app.example.test/mini'
+  }
+);
+
+await unavailableMaxDialogService.notify({
+  userId: 'notify-user',
+  type: 'PAYMENT_CONFIRMED',
+  title: 'Payment',
+  body: 'Critical',
+  category: 'payments',
+  critical: true,
+  idempotencyKey: 'unavailable-max-dialog:payment'
+});
+const unavailableDialogResult = await unavailableMaxDialogOutboxService.runOnce(
+  'notification-worker',
+  {
+    MAX_NOTIFICATION: async (job) => unavailableMaxDialogService.handleMaxNotificationJob(job.payload)
+  },
+  new Date()
+);
+
+assert.equal(unavailableDialogResult, 'processed', 'permanent MAX dialog errors complete the outbox job');
+assert.equal(
+  unavailableMaxDialogHarness.deliveries.find((delivery) => delivery.channel === NotificationDeliveryChannel.MAX)?.status,
+  NotificationDeliveryStatus.SKIPPED,
+  'permanent MAX dialog errors are skipped instead of retried'
 );
 
 let markReadAccessError: unknown = null;

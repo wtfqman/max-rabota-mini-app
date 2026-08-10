@@ -378,12 +378,13 @@ export class NotificationService {
       };
     } catch (error) {
       const safeError = this.sanitizeError(error);
+      const isPermanentDeliveryError = this.isPermanentMaxDeliveryError(error);
       await this.db.notificationDelivery.update({
         where: {
           id: delivery.id
         },
         data: {
-          status: NotificationDeliveryStatus.FAILED,
+          status: isPermanentDeliveryError ? NotificationDeliveryStatus.SKIPPED : NotificationDeliveryStatus.FAILED,
           attempts: {
             increment: 1
           },
@@ -398,6 +399,14 @@ export class NotificationService {
         },
         'MAX notification delivery failed'
       );
+
+      if (isPermanentDeliveryError) {
+        return {
+          skipped: true,
+          reason: 'max_dialog_unavailable'
+        };
+      }
+
       throw error;
     }
   }
@@ -755,6 +764,10 @@ export class NotificationService {
 
   private redact(value: string): string {
     return value.replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
+  }
+
+  private isPermanentMaxDeliveryError(error: unknown): boolean {
+    return error instanceof AppError && (error.statusCode === 403 || error.statusCode === 404);
   }
 
   private isUniqueConstraintError(error: unknown): boolean {
