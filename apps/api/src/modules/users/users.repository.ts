@@ -1,4 +1,9 @@
-import { adWithDetailsInclude, getAdPublicationSettings, mergeAdPublicationSettings } from '@rabst24/core';
+import {
+  adWithDetailsInclude,
+  buildPublicAdFreshnessFilters,
+  getAdPublicationSettings,
+  mergeAdPublicationSettings
+} from '@rabst24/core';
 import { AdStatus, ModerationAction, UserRole, UserStatus, type Prisma, type PrismaClient, type User } from '@rabst24/db';
 import { AppError } from '@rabst24/shared';
 import { FoundationRepository } from '../../shared/modules/module-status.js';
@@ -70,7 +75,8 @@ export class UsersRepository extends FoundationRepository {
       deletedAt: null,
       hiddenAt: null,
       archivedAt: null,
-      isTest: false
+      isTest: false,
+      AND: buildPublicAdFreshnessFilters()
     };
 
     const [activeAds, adsTotal, reviews, reviewSummary] = await this.db.$transaction([

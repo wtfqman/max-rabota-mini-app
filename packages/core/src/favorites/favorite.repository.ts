@@ -1,5 +1,5 @@
 import { AdStatus, UserStatus, type Favorite, type PrismaClient } from '@rabst24/db';
-import { adWithDetailsInclude, type AdWithDetailsRecord } from '../ads/ad.repository.js';
+import { adWithDetailsInclude, buildPublicAdFreshnessFilters, type AdWithDetailsRecord } from '../ads/ad.repository.js';
 
 export interface FavoriteWithAd {
   id: string;
@@ -53,6 +53,8 @@ export class FavoriteRepository {
           deletedAt: null,
           hiddenAt: null,
           archivedAt: null,
+          isTest: false,
+          AND: buildPublicAdFreshnessFilters(),
           owner: {
             is: {
               status: UserStatus.ACTIVE,

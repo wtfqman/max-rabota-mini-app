@@ -21,6 +21,42 @@ import {
 } from '@rabst24/shared';
 import { getAdPublicationSettings, mergeAdPublicationSettings } from './ad-publication-settings.js';
 
+export const PUBLIC_AD_MAX_AGE_DAYS = 30;
+
+export function buildPublicAdFreshnessFilters(now = new Date()): Prisma.AdWhereInput[] {
+  const freshSince = new Date(now.getTime() - PUBLIC_AD_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+
+  return [
+    {
+      OR: [
+        {
+          expiresAt: null
+        },
+        {
+          expiresAt: {
+            gt: now
+          }
+        }
+      ]
+    },
+    {
+      OR: [
+        {
+          publishedAt: {
+            gte: freshSince
+          }
+        },
+        {
+          publishedAt: null,
+          createdAt: {
+            gte: freshSince
+          }
+        }
+      ]
+    }
+  ];
+}
+
 export const adWithDetailsInclude = Prisma.validator<Prisma.AdInclude>()({
   owner: {
     select: {
@@ -745,9 +781,13 @@ export class AdRepository {
 
     filters.push(this.buildVacancyFinanciallyEligibleWhere());
 
+    const baseWhere = this.buildPublicBaseWhere(forcedType ?? canonicalQuery.type);
+    const baseFilters = Array.isArray(baseWhere.AND) ? baseWhere.AND : baseWhere.AND ? [baseWhere.AND] : [];
+    const allFilters = [...baseFilters, ...filters];
+
     return {
-      ...this.buildPublicBaseWhere(forcedType ?? canonicalQuery.type),
-      AND: filters.length > 0 ? filters : undefined
+      ...baseWhere,
+      AND: allFilters.length > 0 ? allFilters : undefined
     };
   }
 
@@ -797,6 +837,8 @@ export class AdRepository {
   }
 
   private buildPublicBaseWhere(type?: AdTypeCode): Prisma.AdWhereInput {
+    const now = new Date();
+
     return {
       status: {
         in: [AdStatus.APPROVED, AdStatus.PUBLISHED]
@@ -811,7 +853,8 @@ export class AdRepository {
           deletedAt: null
         }
       },
-      type: type ? this.mapAdType(type) : undefined
+      type: type ? this.mapAdType(type) : undefined,
+      AND: buildPublicAdFreshnessFilters(now)
     };
   }
 
