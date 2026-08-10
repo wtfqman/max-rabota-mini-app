@@ -208,6 +208,12 @@ export function AdDetailsPage() {
     );
   }
 
+  const resumeContactAccess = ad.type === 'resume' ? ad.contactAccess : undefined;
+  const shouldShowResumeContactAccess = Boolean(
+    resumeContactAccess &&
+      (!resumeContactAccess.canViewContacts || Boolean(resumeContactAccess.maskedContact) || (ad.contacts.length === 0 && resumeContactAccess.verified))
+  );
+
   return (
     <AppPage>
       <Link to={getBackUrl(ad.type)} className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
@@ -315,57 +321,63 @@ export function AdDetailsPage() {
       ) : null}
 
       <SectionCard title="Контакты">
-        {ad.type === 'resume' && ad.contactAccess && !ad.contactAccess.canViewContacts ? (
+        {shouldShowResumeContactAccess && resumeContactAccess ? (
           <div className="grid gap-3">
             <div className="rounded-panel border border-white/10 bg-surface-900/92 p-3">
               <p className="text-xs font-semibold uppercase text-text-muted">
-                {ad.contactAccess.verified ? 'Контакт подтверждён через MAX' : 'Контакт скрыт'}
+                {resumeContactAccess.verified ? 'Контакт подтверждён через MAX' : 'Контакт скрыт'}
               </p>
-              <p className="mt-1 text-lg font-black text-text-primary">{ad.contactAccess.maskedContact ?? '+7 *** ***-**-**'}</p>
+              <p className="mt-1 text-lg font-black text-text-primary">{resumeContactAccess.maskedContact ?? '+7 *** ***-**-**'}</p>
               <p className="mt-2 text-xs leading-5 text-text-secondary">
-                {ad.contactAccess.alreadyPurchased
+                {resumeContactAccess.canViewContacts
+                  ? 'Контакт подтверждён. Полный номер не показывается в карточке, связь идёт через MAX-запрос.'
+                  : resumeContactAccess.alreadyPurchased
                   ? 'Доступ активирован. Отправьте автору запрос на связь через MAX, номер телефона не раскрывается автоматически.'
-                  : ad.contactAccess.canPurchaseContact
+                  : resumeContactAccess.canPurchaseContact
                     ? 'Можно получить возможность связаться за 20 ₽. Сырой номер не передаётся покупателю автоматически.'
                     : 'Покупка связи сейчас недоступна: автору нужно подтвердить контакт или обновить согласие.'}
               </p>
             </div>
-            {contactPurchaseNotice ? (
-              <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">
-                {contactPurchaseNotice}
-              </p>
-            ) : null}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-              {ad.contactAccess.alreadyPurchased ? (
-                <ActionButton type="button" icon={<Send size={18} />} disabled={isContactPurchaseBusy} onClick={() => void sendResumeConnectionRequest()}>
-                  {isContactPurchaseBusy ? 'Отправляем...' : 'Отправить запрос автору'}
-                </ActionButton>
-              ) : (
-                <ActionButton
-                  type="button"
-                  icon={<CreditCard size={18} />}
-                  disabled={isContactPurchaseBusy || !ad.contactAccess.canPurchaseContact}
-                  onClick={() => void unlockResumeContact()}
-                >
-                  {isContactPurchaseBusy ? 'Создаём оплату...' : 'Связаться за 20 ₽'}
-                </ActionButton>
-              )}
-              <ActionButton type="button" variant="secondary" icon={<RefreshCw size={18} />} onClick={() => setReloadKey((value) => value + 1)}>
-                Проверить
-              </ActionButton>
-            </div>
-            {contactPaymentUrl ? (
-              <a
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-panel border border-white/10 bg-surface-900/92 px-3 text-sm font-extrabold text-text-primary"
-                href={contactPaymentUrl}
-                onClick={(event) => {
-                  event.preventDefault();
-                  openExternalUrlWithResult(contactPaymentUrl);
-                }}
-              >
-                <ExternalLink size={18} />
-                Открыть ссылку оплаты
-              </a>
+            {!resumeContactAccess.canViewContacts ? (
+              <>
+                {contactPurchaseNotice ? (
+                  <p className="rounded-panel border border-accent-green/20 bg-accent-greenSoft px-3 py-2 text-sm font-semibold text-accent-green">
+                    {contactPurchaseNotice}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  {resumeContactAccess.alreadyPurchased ? (
+                    <ActionButton type="button" icon={<Send size={18} />} disabled={isContactPurchaseBusy} onClick={() => void sendResumeConnectionRequest()}>
+                      {isContactPurchaseBusy ? 'Отправляем...' : 'Отправить запрос автору'}
+                    </ActionButton>
+                  ) : (
+                    <ActionButton
+                      type="button"
+                      icon={<CreditCard size={18} />}
+                      disabled={isContactPurchaseBusy || !resumeContactAccess.canPurchaseContact}
+                      onClick={() => void unlockResumeContact()}
+                    >
+                      {isContactPurchaseBusy ? 'Создаём оплату...' : 'Связаться за 20 ₽'}
+                    </ActionButton>
+                  )}
+                  <ActionButton type="button" variant="secondary" icon={<RefreshCw size={18} />} onClick={() => setReloadKey((value) => value + 1)}>
+                    Проверить
+                  </ActionButton>
+                </div>
+                {contactPaymentUrl ? (
+                  <a
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-panel border border-white/10 bg-surface-900/92 px-3 text-sm font-extrabold text-text-primary"
+                    href={contactPaymentUrl}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openExternalUrlWithResult(contactPaymentUrl);
+                    }}
+                  >
+                    <ExternalLink size={18} />
+                    Открыть ссылку оплаты
+                  </a>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : ad.contacts.length ? (
