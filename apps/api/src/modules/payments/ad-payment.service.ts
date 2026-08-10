@@ -1412,8 +1412,10 @@ export class AdPaymentService {
 
     const tasks: Array<Promise<void>> = [];
 
-    if (context.resumeUnlock) {
-      tasks.push(this.adAnalyticsService.recordSystemEvent(context.resumeUnlock.resumeAdId, 'resume_contact_unlock_purchased'));
+    const resumeUnlock = context.resumeUnlock;
+
+    if (resumeUnlock) {
+      tasks.push(this.adAnalyticsService.recordSystemEvent(resumeUnlock.resumeAdId, 'resume_contact_unlock_purchased'));
     }
 
     if (context.promotionActivated) {
@@ -1425,7 +1427,9 @@ export class AdPaymentService {
     }
 
     try {
-      await Promise.all(tasks);
+      for (const task of tasks) {
+        await task;
+      }
     } catch (error) {
       logger.warn(
         {
@@ -2283,12 +2287,14 @@ export class AdPaymentService {
   }
 
   private async notifyPaymentSucceeded(context: PaymentSucceededNotificationContext | null): Promise<void> {
-    if (!context || !this.notificationService) {
+    const notificationService = this.notificationService;
+
+    if (!context || !notificationService) {
       return;
     }
 
-    const tasks: Array<Promise<unknown>> = [
-      this.notificationService.notify({
+    const tasks: Array<() => Promise<unknown>> = [
+      () => notificationService.notify({
         userId: context.ownerId,
         type: 'PAYMENT_CONFIRMED',
         title: 'Платёж подтверждён',
@@ -2296,7 +2302,7 @@ export class AdPaymentService {
         category: 'payments',
         critical: true,
         idempotencyKey: `payment:${context.paymentRecordId}:confirmed`,
-        deepLink: this.notificationService.buildPaymentLink(context.paymentRecordId),
+        deepLink: notificationService.buildPaymentLink(context.paymentRecordId),
         payload: {
           paymentId: context.paymentRecordId,
           adId: context.adId,
@@ -2307,7 +2313,7 @@ export class AdPaymentService {
 
     if (context.paymentEffects.addsVacancyPublications && context.packagePublications > 0) {
       tasks.push(
-        this.notificationService.notify({
+        () => notificationService.notify({
           userId: context.ownerId,
           type: 'PUBLICATIONS_GRANTED',
           title: 'Начислены публикации',
@@ -2315,7 +2321,7 @@ export class AdPaymentService {
           category: 'payments',
           critical: true,
           idempotencyKey: `payment:${context.paymentRecordId}:publications`,
-          deepLink: this.notificationService.buildProfileLink(),
+          deepLink: notificationService.buildProfileLink(),
           payload: {
             paymentId: context.paymentRecordId,
             publications: context.packagePublications
@@ -2324,20 +2330,22 @@ export class AdPaymentService {
       );
     }
 
-    if (context.resumeUnlock) {
+    const resumeUnlock = context.resumeUnlock;
+
+    if (resumeUnlock) {
       tasks.push(
-        this.notificationService.notify({
-          userId: context.resumeUnlock.buyerUserId,
+        () => notificationService.notify({
+          userId: resumeUnlock.buyerUserId,
           type: 'RESUME_CONTACT_UNLOCKED',
           title: 'Контакт резюме открыт',
-          body: `Теперь доступен контакт резюме: ${context.resumeUnlock.resumeTitle}.`,
+          body: `Теперь доступен контакт резюме: ${resumeUnlock.resumeTitle}.`,
           category: 'payments',
           critical: true,
-          idempotencyKey: `resume-contact-unlock:${context.resumeUnlock.id}:succeeded`,
-          deepLink: this.notificationService.buildAdLink(context.resumeUnlock.resumeAdId, AdType.RESUME),
+          idempotencyKey: `resume-contact-unlock:${resumeUnlock.id}:succeeded`,
+          deepLink: notificationService.buildAdLink(resumeUnlock.resumeAdId, AdType.RESUME),
           payload: {
-            unlockId: context.resumeUnlock.id,
-            resumeAdId: context.resumeUnlock.resumeAdId,
+            unlockId: resumeUnlock.id,
+            resumeAdId: resumeUnlock.resumeAdId,
             paymentId: context.paymentRecordId
           }
         })
@@ -2346,7 +2354,7 @@ export class AdPaymentService {
 
     if (context.adForModeration) {
       tasks.push(
-        this.notificationService.notify({
+        () => notificationService.notify({
           userId: context.ownerId,
           type: 'AD_SUBMITTED_MODERATION',
           title: 'Объявление отправлено на модерацию',
@@ -2354,7 +2362,7 @@ export class AdPaymentService {
           category: 'ad_status',
           critical: true,
           idempotencyKey: `ad:${context.adId}:payment:${context.paymentRecordId}:submitted`,
-          deepLink: this.notificationService.buildMyAdsLink(),
+          deepLink: notificationService.buildMyAdsLink(),
           payload: {
             adId: context.adId,
             paymentId: context.paymentRecordId
@@ -2363,41 +2371,45 @@ export class AdPaymentService {
       );
     }
 
-    if (context.promotionActivated) {
+    const promotionActivated = context.promotionActivated;
+
+    if (promotionActivated) {
       tasks.push(
-        this.notificationService.notify({
+        () => notificationService.notify({
           userId: context.ownerId,
           type: 'PROMOTION_ACTIVATED',
           title: 'Продвижение включено',
-          body: `Услуга «${this.getPromotionProductTitle(context.promotionActivated.productType)}» активирована для объявления «${context.adTitle}».`,
+          body: `Услуга «${this.getPromotionProductTitle(promotionActivated.productType)}» активирована для объявления «${context.adTitle}».`,
           category: 'payments',
           critical: true,
-          idempotencyKey: `promotion:${context.promotionActivated.id}:activated`,
-          deepLink: this.notificationService.buildAdLink(context.adId, context.adType),
+          idempotencyKey: `promotion:${promotionActivated.id}:activated`,
+          deepLink: notificationService.buildAdLink(context.adId, context.adType),
           payload: {
-            promotionPurchaseId: context.promotionActivated.id,
+            promotionPurchaseId: promotionActivated.id,
             adId: context.adId,
-            productType: context.promotionActivated.productType,
-            endsAt: context.promotionActivated.endsAt?.toISOString() ?? null,
+            productType: promotionActivated.productType,
+            endsAt: promotionActivated.endsAt?.toISOString() ?? null,
             paymentId: context.paymentRecordId
           }
         })
       );
     }
 
-    if (context.referralReward) {
+    const referralReward = context.referralReward;
+
+    if (referralReward) {
       tasks.push(
-        this.notificationService.notify({
-          userId: context.referralReward.referrerId,
+        () => notificationService.notify({
+          userId: referralReward.referrerId,
           type: 'REFERRAL_BONUS_RECEIVED',
           title: 'Получен реферальный бонус',
           body: 'На баланс добавлена 1 бонусная публикация.',
           category: 'payments',
           critical: true,
-          idempotencyKey: `referral:${context.referralReward.referralId}:bonus`,
-          deepLink: this.notificationService.buildProfileLink(),
+          idempotencyKey: `referral:${referralReward.referralId}:bonus`,
+          deepLink: notificationService.buildProfileLink(),
           payload: {
-            referralId: context.referralReward.referralId,
+            referralId: referralReward.referralId,
             publications: 1
           }
         })
@@ -2405,7 +2417,9 @@ export class AdPaymentService {
     }
 
     try {
-      await Promise.all(tasks);
+      for (const task of tasks) {
+        await task();
+      }
     } catch (error) {
       logger.warn(
         {

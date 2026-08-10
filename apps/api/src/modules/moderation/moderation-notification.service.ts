@@ -47,9 +47,9 @@ export class ModerationNotificationService {
 
     const notificationAd = (await this.loadNotificationAd(ad.id)) ?? ad;
 
-    await Promise.allSettled(
-      recipients.map((recipient) =>
-        this.notificationService?.notify({
+    for (const recipient of recipients) {
+      try {
+        await this.notificationService.notify({
           userId: recipient.id,
           type: 'AD_SUBMITTED_MODERATION',
           title: 'Новое объявление на модерацию',
@@ -63,9 +63,18 @@ export class ModerationNotificationService {
             ownerId,
             recipientRole: recipient.role.toLowerCase()
           }
-        })
-      )
-    );
+        });
+      } catch (error) {
+        logger.warn(
+          {
+            err: error,
+            adId: ad.id,
+            recipientId: recipient.id
+          },
+          'Moderation notification enqueue failed'
+        );
+      }
+    }
 
     logger.info({ adId: ad.id, ownerId, recipients: recipients.length }, 'Moderation notification queued');
   }
