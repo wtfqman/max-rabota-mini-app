@@ -106,6 +106,8 @@ type NotificationWithDeliveries = Notification & {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PUBLICATION_WINDOW_MS = 7 * DAY_MS;
 const LOW_PUBLICATION_BALANCE_THRESHOLD = 1;
+const LOW_PUBLICATION_BALANCE_LOOKBACK_MS = 25 * DAY_MS;
+const SCHEDULED_NOTIFICATION_BATCH_SIZE = 50;
 
 export class NotificationService {
   constructor(
@@ -632,7 +634,7 @@ export class NotificationService {
         expiresAt: true,
         metadataJson: true
       },
-      take: 500,
+      take: SCHEDULED_NOTIFICATION_BATCH_SIZE,
       orderBy: {
         publishedAt: 'asc'
       }
@@ -651,7 +653,7 @@ export class NotificationService {
         continue;
       }
 
-      const notification = await this.notify({
+      const notificationCreated = await this.tryNotifyScheduled({
         userId: ad.ownerId,
         type: 'PUBLICATION_EXPIRING',
         title: 'Публикация скоро закончится',
@@ -666,7 +668,7 @@ export class NotificationService {
         }
       });
 
-      if (notification) {
+      if (notificationCreated) {
         notified += 1;
       }
     }
@@ -675,10 +677,14 @@ export class NotificationService {
   }
 
   private async notifyLowPublicationBalances(now: Date): Promise<number> {
+    const changedSince = new Date(now.getTime() - LOW_PUBLICATION_BALANCE_LOOKBACK_MS);
     const balances = await this.db.userVacancyPublicationBalance.findMany({
       where: {
         remaining: {
           lte: LOW_PUBLICATION_BALANCE_THRESHOLD
+        },
+        updatedAt: {
+          gte: changedSince
         },
         user: {
           status: UserStatus.ACTIVE
@@ -703,19 +709,19 @@ export class NotificationService {
       },
       select: {
         userId: true,
-        remaining: true
+        remaining: true,
+        updatedAt: true
       },
-      take: 500,
+      take: SCHEDULED_NOTIFICATION_BATCH_SIZE,
       orderBy: {
-        userId: 'asc'
+        updatedAt: 'asc'
       }
     });
 
     let notified = 0;
-    const dateKey = this.formatDateKey(now);
 
     for (const balance of balances) {
-      const notification = await this.notify({
+      const notificationCreated = await this.tryNotifyScheduled({
         userId: balance.userId,
         type: 'LOW_PUBLICATION_BALANCE',
         title: 'На балансе мало публикаций',
@@ -725,19 +731,37 @@ export class NotificationService {
             : 'Публикации закончились. Пополните баланс, чтобы размещать новые вакансии без паузы.',
         category: 'payments',
         critical: true,
-        idempotencyKey: `vacancy-publication-balance:${balance.userId}:low:${dateKey}:${balance.remaining}`,
+        idempotencyKey: `vacancy-publication-balance:${balance.userId}:low:${this.formatDateKey(balance.updatedAt)}:${balance.remaining}`,
         deepLink: this.buildProfileLink(),
         payload: {
-          remaining: balance.remaining
+          remaining: balance.remaining,
+          balanceUpdatedAt: balance.updatedAt.toISOString()
         }
       });
 
-      if (notification) {
+      if (notificationCreated) {
         notified += 1;
       }
     }
 
     return notified;
+  }
+
+  private async tryNotifyScheduled(input: CreateNotificationInput): Promise<boolean> {
+    try {
+      const notification = await this.notify(input);
+      return Boolean(notification);
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          type: input.type,
+          idempotencyKey: input.idempotencyKey
+        },
+        'Scheduled notification enqueue failed'
+      );
+      return false;
+    }
   }
 
   private async markDeliverySkipped(deliveryId: string, reason: string): Promise<void> {

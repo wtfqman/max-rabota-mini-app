@@ -71,7 +71,8 @@ export async function bootstrap(): Promise<void> {
   };
   const notificationMaintenanceTimer = setInterval(runNotificationMaintenance, 60 * 60 * 1000);
   notificationMaintenanceTimer.unref();
-  runNotificationMaintenance();
+  const notificationMaintenanceInitialTimer = setTimeout(runNotificationMaintenance, 60 * 1000);
+  notificationMaintenanceInitialTimer.unref();
 
   const server = await new Promise<ReturnType<typeof app.listen>>((resolve, reject) => {
     const httpServer = app.listen(config.port, () => {
@@ -88,6 +89,7 @@ export async function bootstrap(): Promise<void> {
     clearInterval(savedSearchDigestTimer);
     clearInterval(promotionMaintenanceTimer);
     clearInterval(notificationMaintenanceTimer);
+    clearTimeout(notificationMaintenanceInitialTimer);
     container.outboxWorker.stop();
 
     server.close(async (error) => {
