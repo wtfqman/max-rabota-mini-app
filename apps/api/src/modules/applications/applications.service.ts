@@ -578,7 +578,7 @@ export class JobApplicationsService {
       applicant: application.applicant,
       contactSnapshot: includeContacts ? parseJson<ContactSnapshot | null>(application.contactSnapshotJson, null) : null,
       resumeSnapshot: parseJson<ResumeSnapshot | null>(application.resumeSnapshotJson, null),
-      resume: application.resumeAd ? serializeAdDetail(application.resumeAd) : null
+      resume: application.resumeAd ? sanitizeApplicationResumeDetail(serializeAdDetail(application.resumeAd)) : null
     };
   }
 
@@ -717,6 +717,17 @@ function dedupeContacts(contacts: ContactSnapshot['contacts']): ContactSnapshot[
     seen.add(key);
     return true;
   });
+}
+
+export function sanitizeApplicationResumeDetail(detail: ReturnType<typeof serializeAdDetail>): ReturnType<typeof serializeAdDetail> {
+  if (detail.type !== 'resume') {
+    return detail;
+  }
+
+  return {
+    ...detail,
+    contacts: []
+  };
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

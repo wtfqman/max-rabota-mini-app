@@ -64,6 +64,7 @@ import { createEquipmentPayloadSchema } from '../apps/web/src/features/equipment
 import { createTradeAdSchema } from '../apps/api/src/modules/trade/trade.schemas.js';
 import { createProductPayloadSchema } from '../apps/web/src/features/products/create-product.types.js';
 import { ResumeContactPurchasesService } from '../apps/api/src/modules/resume-contact-purchases/resume-contact-purchases.service.js';
+import { sanitizeApplicationResumeDetail } from '../apps/api/src/modules/applications/applications.service.js';
 import { NotificationService } from '../apps/api/src/modules/notifications/notifications.service.js';
 import { SavedSearchesService } from '../apps/api/src/modules/saved-searches/saved-searches.service.js';
 import { PromotionsService } from '../apps/api/src/modules/promotions/promotions.service.js';
@@ -318,6 +319,74 @@ const paidResumeContactAccess = await paidResumeContactAccessService.getAccess('
 });
 assert.equal(paidResumeContactAccess.alreadyPurchased, true, 'successful resume contact unlock is remembered');
 assert.equal(paidResumeContactAccess.canViewContacts, true, 'successful resume contact unlock opens the phone number');
+let legacyUnlockWrite: { verifiedContactId?: string | null; consentId?: string | null } | null = null;
+const legacyResumeContactService = new ResumeContactPurchasesService(
+  {
+    ad: {
+      findFirst: async () => ({
+        id: 'legacy-resume-contact',
+        ownerId: 'legacy-owner',
+        type: AdType.RESUME,
+        status: AdStatus.PUBLISHED,
+        title: 'Старое резюме',
+        contacts: [{ id: 'legacy-contact-1' }]
+      })
+    },
+    jobApplication: {
+      findFirst: async () => null
+    },
+    resumeContactUnlock: {
+      findUnique: async () => null,
+      upsert: async (query: { update: { verifiedContactId?: string | null; consentId?: string | null } }) => {
+        legacyUnlockWrite = query.update;
+        return {};
+      }
+    },
+    adPayment: {
+      upsert: async () => ({
+        id: 'legacy-payment',
+        yooKassaPaymentId: 'yk-legacy',
+        status: PaymentStatus.PENDING,
+        amountValue: '20.00',
+        currency: 'RUB',
+        confirmationUrl: 'https://yookassa.ru/payments/legacy',
+        rawPayloadJson: '{}'
+      })
+    }
+  } as never,
+  {
+    createPayment: async () => ({
+      id: 'yk-legacy',
+      status: 'pending',
+      confirmation: {
+        confirmation_url: 'https://yookassa.ru/payments/legacy'
+      }
+    })
+  } as never,
+  undefined,
+  {
+    enabled: true,
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/resumes/test',
+    testMode: true
+  }
+);
+const legacyResumeAccess = await legacyResumeContactService.getAccess('legacy-resume-contact', {
+  userId: 'legacy-buyer',
+  role: 'user'
+});
+assert.equal(legacyResumeAccess.canPurchaseContact, true, 'legacy resume contact is purchasable');
+const legacyResumePurchase = await legacyResumeContactService.createPurchase('legacy-buyer', 'legacy-resume-contact');
+assert.equal(legacyResumePurchase.payment?.amount, '20.00', 'legacy resume contact purchase costs 20 RUB');
+const capturedLegacyUnlockWrite = legacyUnlockWrite as { verifiedContactId?: string | null; consentId?: string | null } | null;
+assert.ok(capturedLegacyUnlockWrite, 'legacy resume contact unlock is written');
+assert.equal(capturedLegacyUnlockWrite.verifiedContactId, null, 'legacy resume contact unlock does not require verified contact id');
+assert.equal(capturedLegacyUnlockWrite.consentId, null, 'legacy resume contact unlock does not require consent id');
+const applicationResumeDetail = sanitizeApplicationResumeDetail({
+  type: 'resume',
+  contacts: [{ id: 'contact-1', type: 'phone', label: 'Телефон', value: '+79990000000', isPreferred: true }]
+} as ReturnType<typeof sanitizeApplicationResumeDetail>);
+assert.equal(applicationResumeDetail.contacts.length, 0, 'embedded application resume does not expose legacy contact directly');
 assert.equal(
   getPaymentPurposeEffects({
     primary: 'AD_PROMOTION',

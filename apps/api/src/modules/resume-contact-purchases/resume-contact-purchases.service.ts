@@ -7,6 +7,13 @@ import type { VerifiedContactsService } from '../verified-contacts/verified-cont
 export const RESUME_CONTACT_PRICE_RUB = '20.00';
 export const RESUME_CONNECTION_PURPOSE = 'RESUME_CONNECTION_ACCESS';
 
+type ResumeContactPurchaseSource = {
+  source: 'verified' | 'legacy';
+  verifiedContactId: string | null;
+  consentId: string | null;
+  accessMode: ContactAccessMode;
+};
+
 export class ResumeContactPurchasesService {
   constructor(
     private readonly db: PrismaClient,
@@ -115,7 +122,7 @@ export class ResumeContactPurchasesService {
       });
     }
 
-    const verified = await this.requireVerifiedContactsService().ensureContactForResumePurchase(resumeAdId, buyerUserId);
+    const contactSource = await this.resolvePurchaseContactSource(resumeAdId, buyerUserId);
 
     const existing = await this.db.resumeContactUnlock.findUnique({
       where: {
@@ -150,7 +157,7 @@ export class ResumeContactPurchasesService {
       });
     }
 
-    const idempotenceKey = `resume-contact:${buyerUserId}:${resumeAdId}:${verified.contact.id}:${ContactAccessMode.MAX_VERIFIED_CONNECTION}`;
+    const idempotenceKey = `resume-contact:${buyerUserId}:${resumeAdId}:${contactSource.verifiedContactId ?? 'legacy'}:${contactSource.accessMode}`;
     const payment = await this.yooKassaClient.createPayment(
       {
         amount: {
@@ -170,9 +177,10 @@ export class ResumeContactPurchasesService {
           buyerUserId,
           authorUserId: resume.ownerId,
           resumeAdId,
-          verifiedContactId: verified.contact.id,
-          consentId: verified.consent.id,
-          accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION,
+          verifiedContactId: contactSource.verifiedContactId ?? '',
+          consentId: contactSource.consentId ?? '',
+          accessMode: contactSource.accessMode,
+          contactSource: contactSource.source,
           paymentPurpose: RESUME_CONNECTION_PURPOSE,
           paymentPurposeComponents: RESUME_CONNECTION_PURPOSE
         },
@@ -250,9 +258,9 @@ export class ResumeContactPurchasesService {
         amount: RESUME_CONTACT_PRICE_RUB,
         currency: this.settings.currency,
         status: dbPayment.status,
-        verifiedContactId: verified.contact.id,
-        consentId: verified.consent.id,
-        accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION
+        verifiedContactId: contactSource.verifiedContactId,
+        consentId: contactSource.consentId,
+        accessMode: contactSource.accessMode
       },
       create: {
         buyerUserId,
@@ -261,9 +269,9 @@ export class ResumeContactPurchasesService {
         amount: RESUME_CONTACT_PRICE_RUB,
         currency: this.settings.currency,
         status: dbPayment.status,
-        verifiedContactId: verified.contact.id,
-        consentId: verified.consent.id,
-        accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION
+        verifiedContactId: contactSource.verifiedContactId,
+        consentId: contactSource.consentId,
+        accessMode: contactSource.accessMode
       }
     });
 
@@ -395,20 +403,30 @@ export class ResumeContactPurchasesService {
   }
 
   private async getAvailability(resumeAdId: string) {
+    const legacyContact = await this.findLegacyResumeContact(resumeAdId);
+
     if (!this.verifiedContactsService) {
-      return {
-        contactStatus: 'UNVERIFIED_LEGACY',
-        verified: false,
-        canPurchaseContact: false,
-        maskedContact: null,
-        verifiedAt: null,
-        expiresAt: null,
-        accessMode: 'MAX_VERIFIED_CONNECTION',
-        price: RESUME_CONTACT_PRICE_RUB
-      };
+      return legacyContact
+        ? this.legacyAvailability()
+        : {
+            contactStatus: 'UNVERIFIED_LEGACY',
+            verified: false,
+            canPurchaseContact: false,
+            maskedContact: null,
+            verifiedAt: null,
+            expiresAt: null,
+            accessMode: 'MAX_VERIFIED_CONNECTION',
+            price: RESUME_CONTACT_PRICE_RUB
+          };
     }
 
-    return this.verifiedContactsService.getResumeContactAvailability(resumeAdId);
+    const availability = await this.verifiedContactsService.getResumeContactAvailability(resumeAdId);
+
+    if (!availability.canPurchaseContact && availability.contactStatus === 'UNVERIFIED_LEGACY' && legacyContact) {
+      return this.legacyAvailability();
+    }
+
+    return availability;
   }
 
   private requireVerifiedContactsService(): VerifiedContactsService {
@@ -417,6 +435,99 @@ export class ResumeContactPurchasesService {
     }
 
     return this.verifiedContactsService;
+  }
+
+  private async resolvePurchaseContactSource(resumeAdId: string, buyerUserId: string): Promise<ResumeContactPurchaseSource> {
+    if (this.verifiedContactsService) {
+      try {
+        const verified = await this.verifiedContactsService.ensureContactForResumePurchase(resumeAdId, buyerUserId);
+
+        return {
+          source: 'verified',
+          verifiedContactId: verified.contact.id,
+          consentId: verified.consent.id,
+          accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION
+        };
+      } catch (error) {
+        if (!this.canFallbackToLegacyContact(error)) {
+          throw error;
+        }
+      }
+    }
+
+    if (await this.findLegacyResumeContact(resumeAdId)) {
+      return {
+        source: 'legacy',
+        verifiedContactId: null,
+        consentId: null,
+        accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION
+      };
+    }
+
+    throw new AppError('Resume contact requires verification', 409, {
+      code: 'CONTACT_NOT_VERIFIED'
+    });
+  }
+
+  private async findLegacyResumeContact(resumeAdId: string): Promise<{ id: string } | null> {
+    const resume = await this.db.ad.findFirst({
+      where: {
+        id: resumeAdId,
+        type: AdType.RESUME,
+        status: {
+          in: [AdStatus.APPROVED, AdStatus.PUBLISHED]
+        },
+        deletedAt: null,
+        hiddenAt: null,
+        archivedAt: null,
+        contacts: {
+          some: {
+            value: {
+              not: ''
+            }
+          }
+        }
+      },
+      select: {
+        contacts: {
+          where: {
+            value: {
+              not: ''
+            }
+          },
+          select: {
+            id: true
+          },
+          take: 1
+        }
+      }
+    });
+
+    return resume?.contacts?.[0] ?? null;
+  }
+
+  private legacyAvailability() {
+    return {
+      contactStatus: 'LEGACY_AVAILABLE',
+      verified: false,
+      canPurchaseContact: true,
+      reason: null,
+      maskedContact: '+7 *** ***-**-**',
+      verifiedAt: null,
+      expiresAt: null,
+      accessMode: 'MAX_VERIFIED_CONNECTION',
+      price: RESUME_CONTACT_PRICE_RUB
+    };
+  }
+
+  private canFallbackToLegacyContact(error: unknown): boolean {
+    if (!(error instanceof AppError)) {
+      return false;
+    }
+
+    const code = (error.details as { code?: string } | undefined)?.code;
+
+    return code === 'CONTACT_NOT_VERIFIED' || code === 'CONTACT_CONSENT_REQUIRED';
   }
 
   private toPaymentPayload(payment: {
