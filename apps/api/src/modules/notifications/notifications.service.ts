@@ -567,20 +567,29 @@ export class NotificationService {
   }
 
   buildAdLink(adId: string, type?: string): NotificationDeepLink {
-    const path = type === 'VACANCY' ? `/vacancies/${adId}` : `/ads/${adId}`;
+    const normalizedType = type?.toLowerCase();
+    const routeByType: Record<string, string> = {
+      vacancy: 'vacancies',
+      resume: 'resumes',
+      equipment: 'equipment',
+      material: 'materials',
+      tool: 'tools'
+    };
+    const route = normalizedType ? routeByType[normalizedType] : null;
+    const path = route ? `/${route}/${adId}` : `/ads/${adId}`;
 
     return {
       label: 'Открыть объявление',
       path,
-      startParam: `ad_${adId}`
+      startParam: route && normalizedType ? `ad_${normalizedType}_${adId}` : `ad_${adId}`
     };
   }
 
-  buildMyAdsLink(): NotificationDeepLink {
+  buildMyAdsLink(adId?: string | null): NotificationDeepLink {
     return {
       label: 'Открыть Мои объявления',
-      path: '/my-ads',
-      startParam: 'my_ads'
+      path: adId ? `/my-ads?adId=${encodeURIComponent(adId)}` : '/my-ads',
+      startParam: adId ? `my_ad_${adId}` : 'my_ads'
     };
   }
 

@@ -46,16 +46,48 @@ function resolveStartParamPath(startParam: string): string | null {
     return '/moderation';
   }
 
-  const match = /^(?:ad_)?(vacancy|resume|equipment|material|tool)_([a-z0-9_-]+)$/i.exec(normalized);
-
-  if (!match) {
-    return null;
+  if (normalized.toLowerCase() === 'my_ads') {
+    return '/my-ads';
   }
 
-  const type = match[1].toLowerCase() as StartParamAdType;
-  const adId = match[2];
+  if (normalized.toLowerCase() === 'profile') {
+    return '/profile';
+  }
 
-  return `/${AD_ROUTES[type]}/${adId}`;
+  const moderationMatch = /^moderation_([a-z0-9_-]+)$/i.exec(normalized);
+
+  if (moderationMatch) {
+    return `/moderation?adId=${encodeURIComponent(moderationMatch[1])}`;
+  }
+
+  const myAdMatch = /^my_ad_([a-z0-9_-]+)$/i.exec(normalized);
+
+  if (myAdMatch) {
+    return `/my-ads?adId=${encodeURIComponent(myAdMatch[1])}`;
+  }
+
+  const paymentMatch = /^payment_([a-z0-9_-]+)$/i.exec(normalized);
+
+  if (paymentMatch) {
+    return `/profile/payments?payment=${encodeURIComponent(paymentMatch[1])}`;
+  }
+
+  const match = /^(?:ad_)?(vacancy|resume|equipment|material|tool)_([a-z0-9_-]+)$/i.exec(normalized);
+
+  if (match) {
+    const type = match[1].toLowerCase() as StartParamAdType;
+    const adId = match[2];
+
+    return `/${AD_ROUTES[type]}/${adId}`;
+  }
+
+  const legacyAdMatch = /^ad_([a-z0-9_-]+)$/i.exec(normalized);
+
+  if (legacyAdMatch) {
+    return `/ads/${legacyAdMatch[1]}`;
+  }
+
+  return null;
 }
 
 function safeDecode(value: string): string {

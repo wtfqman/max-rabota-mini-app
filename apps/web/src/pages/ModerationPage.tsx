@@ -15,6 +15,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useAppStore } from '../app/store/app-store.js';
+import { useSearchParams } from 'react-router-dom';
 import type { ChannelRemovalResult, ModerationAdDetail, ModerationQueueStatus, PublicAdDetail } from '../features/ads/ad.types.js';
 import type { AdReportAction, AdReportStatus, ModerationAdReport } from '../features/reports/report.types.js';
 import { apiClient } from '../shared/api/client.js';
@@ -65,6 +66,8 @@ const moderationAccountText = {
 
 export function ModerationPage() {
   const role = useAppStore((state) => state.user.role);
+  const [searchParams] = useSearchParams();
+  const targetAdId = searchParams.get('adId');
   const [view, setView] = useState<'ads' | 'reports'>('ads');
   const [queueStatus, setQueueStatus] = useState<ModerationQueueStatus>('pending_moderation');
   const [ads, setAds] = useState<ModerationAdDetail[]>([]);
@@ -99,7 +102,10 @@ export function ModerationPage() {
         }
 
         setAds(response.data);
-        setSelected((current) => response.data.find((ad) => ad.id === current?.id) ?? response.data[0] ?? null);
+        setSelected((current) => {
+          const targetAd = targetAdId ? response.data.find((ad) => ad.id === targetAdId) : null;
+          return targetAd ?? response.data.find((ad) => ad.id === current?.id) ?? response.data[0] ?? null;
+        });
         setStatus('ready');
       })
       .catch((requestError: unknown) => {
@@ -114,7 +120,7 @@ export function ModerationPage() {
     return () => {
       active = false;
     };
-  }, [queueStatus, role, reloadKey, view]);
+  }, [queueStatus, role, reloadKey, targetAdId, view]);
 
   const stats = useMemo(() => {
     const published = ads.filter((ad) => ad.status === 'published' || ad.status === 'approved').length;

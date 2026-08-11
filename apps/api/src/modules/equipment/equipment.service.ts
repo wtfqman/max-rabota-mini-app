@@ -89,7 +89,7 @@ export class EquipmentService extends FoundationService {
       body: `Объявление «${title}» сохранено.`,
       category: 'ad_status',
       idempotencyKey: `ad:${adId}:created`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         type: 'equipment'
@@ -104,7 +104,7 @@ export class EquipmentService extends FoundationService {
       category: 'ad_status',
       critical: true,
       idempotencyKey: `ad:${adId}:submitted`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         type: 'equipment'

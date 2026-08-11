@@ -193,7 +193,7 @@ export class VacanciesService extends FoundationService {
       body: `Вакансия «${title}» сохранена.`,
       category: 'ad_status',
       idempotencyKey: `ad:${adId}:created`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         paymentRequired: hasPayment,
@@ -209,7 +209,7 @@ export class VacanciesService extends FoundationService {
       category: hasPayment ? 'payments' : 'ad_status',
       critical: true,
       idempotencyKey: hasPayment ? `ad:${adId}:payment-required` : `ad:${adId}:submitted`,
-      deepLink: hasPayment ? this.notificationService.buildPaymentLink(paymentId) : this.notificationService.buildMyAdsLink(),
+      deepLink: hasPayment ? this.notificationService.buildPaymentLink(paymentId) : this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         paymentId

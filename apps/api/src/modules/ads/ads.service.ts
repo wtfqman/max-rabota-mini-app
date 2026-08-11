@@ -376,7 +376,7 @@ export class AdsService extends FoundationService {
       category: 'ad_status',
       critical: true,
       idempotencyKey: revisionId ? `ad:${adId}:revision:${revisionId}:submitted` : `ad:${adId}:submitted`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         revisionId

@@ -99,7 +99,7 @@ export class ResumesService extends FoundationService {
       body: `Резюме «${title}» сохранено.`,
       category: 'ad_status',
       idempotencyKey: `ad:${adId}:created`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         type: 'resume'
@@ -114,7 +114,7 @@ export class ResumesService extends FoundationService {
       category: 'ad_status',
       critical: true,
       idempotencyKey: `ad:${adId}:submitted`,
-      deepLink: this.notificationService.buildMyAdsLink(),
+      deepLink: this.notificationService.buildMyAdsLink(adId),
       payload: {
         adId,
         type: 'resume'
