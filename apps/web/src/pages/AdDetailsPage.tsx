@@ -330,11 +330,11 @@ export function AdDetailsPage() {
               <p className="mt-1 text-lg font-black text-text-primary">{resumeContactAccess.maskedContact ?? '+7 *** ***-**-**'}</p>
               <p className="mt-2 text-xs leading-5 text-text-secondary">
                 {resumeContactAccess.canViewContacts
-                  ? 'Контакт подтверждён. Полный номер не показывается в карточке, связь идёт через MAX-запрос.'
+                  ? 'Контакт открыт. Номер телефона доступен в карточке резюме.'
                   : resumeContactAccess.alreadyPurchased
-                  ? 'Доступ активирован. Отправьте автору запрос на связь через MAX, номер телефона не раскрывается автоматически.'
+                  ? 'Доступ активирован. Обновите карточку, чтобы увидеть номер телефона.'
                   : resumeContactAccess.canPurchaseContact
-                    ? 'Можно получить возможность связаться за 20 ₽. Сырой номер не передаётся покупателю автоматически.'
+                    ? 'Можно купить номер телефона резюме за 20 ₽. После успешной оплаты контакт откроется в карточке.'
                     : 'Покупка связи сейчас недоступна: автору нужно подтвердить контакт или обновить согласие.'}
               </p>
             </div>
@@ -357,7 +357,7 @@ export function AdDetailsPage() {
                       disabled={isContactPurchaseBusy || !resumeContactAccess.canPurchaseContact}
                       onClick={() => void unlockResumeContact()}
                     >
-                      {isContactPurchaseBusy ? 'Создаём оплату...' : 'Связаться за 20 ₽'}
+                      {isContactPurchaseBusy ? 'Создаём оплату...' : 'Купить номер за 20 ₽'}
                     </ActionButton>
                   )}
                   <ActionButton type="button" variant="secondary" icon={<RefreshCw size={18} />} onClick={() => setReloadKey((value) => value + 1)}>

@@ -91,7 +91,7 @@ export class ResumeContactPurchasesService {
     const succeeded = unlock?.status === PaymentStatus.SUCCEEDED && unlock.unlockedAt !== null && unlock.refundedAt === null;
 
     return {
-      canViewContacts: false,
+      canViewContacts: succeeded,
       alreadyPurchased: succeeded,
       unlockStatus: unlock?.status.toLowerCase() ?? null,
       contactStatus: availability.contactStatus,

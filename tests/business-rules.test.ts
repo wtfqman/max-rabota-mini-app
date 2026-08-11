@@ -42,6 +42,7 @@ import { PaymentHistoryService } from '../apps/api/src/modules/payments/payment-
 import { AdsService } from '../apps/api/src/modules/ads/ads.service.js';
 import { AdRevisionRepository, parseRevisionData, type AdRevisionRecord } from '../apps/api/src/modules/ads/ad-revision.repository.js';
 import { saveAdRevisionSchema } from '../apps/api/src/modules/ads/ads.schemas.js';
+import { AdRepository } from '../packages/core/src/ads/ad.repository.js';
 import { requireFeature } from '../apps/api/src/shared/feature-flags/feature-guard.js';
 import {
   OUTBOX_JOB_STATUS,
@@ -280,6 +281,43 @@ assert.equal(
   false,
   'foreign user still needs to buy resume contact'
 );
+const paidResumeContactAccessService = new ResumeContactPurchasesService(
+  {
+    ad: {
+      findFirst: async () => ({
+        id: 'resume-paid-contact-access',
+        ownerId: 'resume-owner',
+        type: AdType.RESUME,
+        status: AdStatus.PUBLISHED,
+        title: 'Резюме электрика'
+      })
+    },
+    jobApplication: {
+      findFirst: async () => null
+    },
+    resumeContactUnlock: {
+      findUnique: async () => ({
+        status: PaymentStatus.SUCCEEDED,
+        unlockedAt: new Date('2026-08-11T00:00:00.000Z'),
+        refundedAt: null
+      })
+    }
+  } as never,
+  {} as never,
+  undefined,
+  {
+    enabled: true,
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/resumes/test',
+    testMode: true
+  }
+);
+const paidResumeContactAccess = await paidResumeContactAccessService.getAccess('resume-paid-contact-access', {
+  userId: 'employer-buyer',
+  role: 'user'
+});
+assert.equal(paidResumeContactAccess.alreadyPurchased, true, 'successful resume contact unlock is remembered');
+assert.equal(paidResumeContactAccess.canViewContacts, true, 'successful resume contact unlock opens the phone number');
 assert.equal(
   getPaymentPurposeEffects({
     primary: 'AD_PROMOTION',
@@ -1129,6 +1167,23 @@ const sortedPromotionAds = [
   ((right.boostedAt?.getTime() ?? 0) - (left.boostedAt?.getTime() ?? 0))
 );
 assert.equal(sortedPromotionAds[0].id, 'pinned', 'promotion sorting keeps pinned first');
+let republishUpdateData: { publishedAt?: unknown } | null = null;
+const republishRepository = new AdRepository({
+  ad: {
+    findUnique: async () => ({
+      metadataJson: null,
+      publishedAt: new Date('2026-08-01T00:00:00.000Z')
+    }),
+    updateMany: async (query: { data: { publishedAt?: unknown } }) => {
+      republishUpdateData = query.data;
+      return { count: 0 };
+    }
+  }
+} as never);
+await republishRepository.markPublishedIfPublishable('already-published-ad');
+const capturedRepublishUpdateData = republishUpdateData as { publishedAt?: unknown } | null;
+assert.ok(capturedRepublishUpdateData, 'republish update data is captured');
+assert.equal(capturedRepublishUpdateData.publishedAt, undefined, 'republishing an already published ad does not bump it for free');
 
 const analyticsHarness = createMemoryAdAnalyticsHarness();
 const adAnalyticsService = new AdAnalyticsService(analyticsHarness.db as never);

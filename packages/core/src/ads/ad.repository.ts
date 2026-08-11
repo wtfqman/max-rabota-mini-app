@@ -584,6 +584,16 @@ export class AdRepository {
   }
 
   async markPublishedIfPublishable(adId: string): Promise<AdWithDetailsRecord | null> {
+    const existing = await this.db.ad.findUnique({
+      where: {
+        id: adId
+      },
+      select: {
+        metadataJson: true,
+        publishedAt: true
+      }
+    });
+
     const updated = await this.db.ad.updateMany({
       where: {
         id: adId,
@@ -595,7 +605,9 @@ export class AdRepository {
         archivedAt: null,
         AND: [this.buildVacancyFinanciallyEligibleWhere()]
       },
-      data: this.buildStatusUpdateData(AdStatus.PUBLISHED)
+      data: this.buildStatusUpdateData(AdStatus.PUBLISHED, existing?.metadataJson, {
+        preservePublishedAt: Boolean(existing?.publishedAt)
+      })
     });
 
     if (updated.count === 0) {
@@ -1423,7 +1435,11 @@ export class AdRepository {
     return status === AdStatus.APPROVED || status === AdStatus.PUBLISHED;
   }
 
-  private buildStatusUpdateData(status: AdStatus, metadataJson?: string | null): Prisma.AdUpdateInput {
+  private buildStatusUpdateData(
+    status: AdStatus,
+    metadataJson?: string | null,
+    options: { preservePublishedAt?: boolean } = {}
+  ): Prisma.AdUpdateInput {
     const now = new Date();
     const shouldDisableAutoRepeat =
       status === AdStatus.PAYMENT_PENDING ||
@@ -1440,7 +1456,7 @@ export class AdRepository {
       status,
       moderatedAt:
         status === AdStatus.APPROVED || status === AdStatus.REJECTED ? now : undefined,
-      publishedAt: status === AdStatus.PUBLISHED ? now : undefined,
+      publishedAt: status === AdStatus.PUBLISHED && !options.preservePublishedAt ? now : undefined,
       hiddenAt: status === AdStatus.HIDDEN ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
       archivedAt: status === AdStatus.ARCHIVED ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
       deletedAt: status === AdStatus.DELETED ? now : status === AdStatus.PAYMENT_PENDING || status === AdStatus.PENDING_MODERATION || status === AdStatus.APPROVED || status === AdStatus.PUBLISHED ? null : undefined,
