@@ -82,7 +82,16 @@ export class ResumesService extends FoundationService {
     );
 
     void this.moderationNotificationService.notifyNewAd(ad, ownerId);
-    await this.notifyResumeCreated(ownerId, ad.id, ad.title);
+    void this.notifyResumeCreated(ownerId, ad.id, ad.title).catch((error: unknown) => {
+      logger.warn(
+        {
+          err: error,
+          ownerId,
+          adId: ad.id
+        },
+        '[RESUME_CREATE] owner notification enqueue failed'
+      );
+    });
 
     return { ad, payment: null };
   }
