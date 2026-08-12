@@ -1,5 +1,5 @@
 import { config, logger } from '@rabst24/config';
-import { prisma } from '@rabst24/db';
+import { configurePrismaRuntime, prisma } from '@rabst24/db';
 import { createTelegramBotContainer } from './container.js';
 import { registerProcessErrorHandlers } from './process-handlers.js';
 import { sanitizeTelegramError } from './telegram-error-log.js';
@@ -22,6 +22,7 @@ export async function bootstrap(): Promise<void> {
   let isShuttingDown = false;
 
   await prisma.$connect();
+  await configurePrismaRuntime();
   logger.info('Database connection established');
 
   await container.targetRepository.ensureExpectedTargets();

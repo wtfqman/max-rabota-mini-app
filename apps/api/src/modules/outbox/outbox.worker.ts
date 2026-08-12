@@ -6,6 +6,7 @@ import type { OutboxJobType } from './outbox.schemas.js';
 export class OutboxWorker {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
+  private lastRecoveryAt = 0;
   private readonly workerId = `api-${process.pid}-${Date.now()}`;
 
   constructor(
@@ -46,10 +47,19 @@ export class OutboxWorker {
     }
 
     this.running = true;
+    const now = Date.now();
+    const recoveryIntervalMs = Math.max(this.options.intervalMs, 60_000);
+    const shouldRecoverStuck = now - this.lastRecoveryAt >= recoveryIntervalMs;
+    const recovery = shouldRecoverStuck ? this.outboxService.recoverStuck() : Promise.resolve(0);
 
-    void this.outboxService
-      .recoverStuck()
-      .then(() => this.outboxService.runOnce(this.workerId, this.options.handlers ?? createDefaultOutboxHandlers()))
+    void recovery
+      .then(() => {
+        if (shouldRecoverStuck) {
+          this.lastRecoveryAt = now;
+        }
+
+        return this.outboxService.runOnce(this.workerId, this.options.handlers ?? createDefaultOutboxHandlers());
+      })
       .catch((error) => {
         logger.warn({ err: error }, 'Outbox worker tick failed');
       })

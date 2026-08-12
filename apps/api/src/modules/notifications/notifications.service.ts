@@ -267,16 +267,27 @@ export class NotificationService {
       return;
     }
 
-    await this.outboxService.enqueue({
-      type: 'MAX_NOTIFICATION',
-      payload: {
-        notificationId: notification.id,
-        deliveryId: maxDelivery.id
-      },
-      idempotencyKey: `notification:max:${notification.id}`,
-      maxAttempts: 5,
-      reviveTerminal: true
-    });
+    try {
+      await this.outboxService.enqueue({
+        type: 'MAX_NOTIFICATION',
+        payload: {
+          notificationId: notification.id,
+          deliveryId: maxDelivery.id
+        },
+        idempotencyKey: `notification:max:${notification.id}`,
+        maxAttempts: 5,
+        reviveTerminal: true
+      });
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          notificationId: notification.id,
+          deliveryId: maxDelivery.id
+        },
+        'MAX notification outbox enqueue failed'
+      );
+    }
   }
 
   async handleMaxNotificationJob(payload: Record<string, unknown>): Promise<Record<string, unknown>> {

@@ -313,6 +313,21 @@ export class AdAnalyticsService {
   }
 
   private async tryCreateUniqueView(adId: string, date: Date, visitorHash: string): Promise<boolean> {
+    const existing = await this.db.adMetricUniqueView.findFirst({
+      where: {
+        adId,
+        date,
+        visitorHash
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (existing) {
+      return false;
+    }
+
     try {
       await this.db.adMetricUniqueView.create({
         data: {

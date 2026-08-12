@@ -1,5 +1,5 @@
 import { config, logger } from '@rabst24/config';
-import { prisma } from '@rabst24/db';
+import { configurePrismaRuntime, prisma } from '@rabst24/db';
 import { createBotContainer } from './container.js';
 import { registerProcessErrorHandlers } from './process-handlers.js';
 
@@ -8,6 +8,7 @@ export async function bootstrap(): Promise<void> {
   let isShuttingDown = false;
 
   await prisma.$connect();
+  await configurePrismaRuntime();
   logger.info('Database connection established');
 
   if (config.max.botMode !== 'long-polling') {

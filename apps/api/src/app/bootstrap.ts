@@ -1,5 +1,5 @@
 import { config, logger } from '@rabst24/config';
-import { prisma } from '@rabst24/db';
+import { configurePrismaRuntime, prisma } from '@rabst24/db';
 import { createApp } from './create-app.js';
 import { createContainer } from './container.js';
 
@@ -8,6 +8,7 @@ export async function bootstrap(): Promise<void> {
   const app = createApp(container);
 
   await prisma.$connect();
+  await configurePrismaRuntime();
   logger.info('Database connection established');
   logger.info('Auto publication service is disabled');
   if (config.features.TELEGRAM_SYNC_ENABLED) {

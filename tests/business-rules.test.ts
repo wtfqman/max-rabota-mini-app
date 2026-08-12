@@ -5510,6 +5510,11 @@ function createMemoryAdAnalyticsHarness() {
       }
     },
     adMetricUniqueView: {
+      findFirst: async ({ where }: { where: { adId: string; date: Date; visitorHash: string } }) => {
+        const key = `${where.adId}:${dayKey(where.date)}:${where.visitorHash}`;
+
+        return uniqueViews.has(key) ? { id: key } : null;
+      },
       create: async ({ data }: { data: { adId: string; date: Date; visitorHash: string } }) => {
         const key = `${data.adId}:${dayKey(data.date)}:${data.visitorHash}`;
 
