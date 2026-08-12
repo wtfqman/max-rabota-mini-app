@@ -240,7 +240,7 @@ export function SimpleCreateAdPage({ kind }: { kind: CreateAdKind }) {
   } | null>(null);
   const [contactVerificationNotice, setContactVerificationNotice] = useState<string | null>(null);
   const [isContactVerificationBusy, setIsContactVerificationBusy] = useState(false);
-  const resumeContactVerificationRequired = copy.kind === 'resume' && (contactVerificationEnabled || botContactFallbackEnabled);
+  const resumeContactVerificationRequired = false;
 
   useEffect(() => {
     setMode('form');
