@@ -370,7 +370,7 @@ export class AdRepository {
   async findPublicById(adId: string, forcedType?: AdTypeCode): Promise<PublicAdRecord | null> {
     return this.db.ad.findFirst({
       where: {
-        ...this.buildPublicBaseWhere(forcedType),
+        ...this.buildPublicBaseWhere(forcedType, { includeFreshness: false }),
         id: adId
       },
       include: adWithDetailsInclude
@@ -859,8 +859,12 @@ export class AdRepository {
     ]);
   }
 
-  private buildPublicBaseWhere(type?: AdTypeCode): Prisma.AdWhereInput {
+  private buildPublicBaseWhere(
+    type?: AdTypeCode,
+    options: { includeFreshness?: boolean } = {}
+  ): Prisma.AdWhereInput {
     const now = new Date();
+    const includeFreshness = options.includeFreshness ?? true;
 
     return {
       status: {
@@ -877,7 +881,7 @@ export class AdRepository {
         }
       },
       type: type ? this.mapAdType(type) : undefined,
-      AND: buildPublicAdFreshnessFilters(now)
+      AND: includeFreshness ? buildPublicAdFreshnessFilters(now) : undefined
     };
   }
 

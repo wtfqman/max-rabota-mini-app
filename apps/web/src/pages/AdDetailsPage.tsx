@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Building2, CreditCard, ExternalLink, Flag, Heart, Phone, RefreshCw, Send } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAppStore } from '../app/store/app-store.js';
 import { apiClient } from '../shared/api/client.js';
 import { getUserFacingError } from '../shared/api/user-facing.js';
@@ -19,6 +19,7 @@ import { ReviewsBlock } from '../features/reviews/ReviewsBlock.js';
 
 export function AdDetailsPage() {
   const { adId } = useParams();
+  const location = useLocation();
   const [ad, setAd] = useState<PublicAdDetail | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +44,7 @@ export function AdDetailsPage() {
     setStatus('loading');
     setError(null);
 
-    apiClient
-      .getAdDetails(adId)
+    getDetailsForPath(location.pathname, adId)
       .then((response) => {
         if (!active) {
           return;
@@ -77,7 +77,7 @@ export function AdDetailsPage() {
     return () => {
       active = false;
     };
-  }, [accessToken, adId, reloadKey]);
+  }, [accessToken, adId, location.pathname, reloadKey]);
 
   const toggleFavorite = async () => {
     if (!accessToken) {
@@ -487,6 +487,30 @@ function getBackUrl(type: string): string {
   }
 
   return '/vacancies';
+}
+
+function getDetailsForPath(pathname: string, adId: string) {
+  if (pathname.startsWith('/resumes/')) {
+    return apiClient.getResumeDetails(adId);
+  }
+
+  if (pathname.startsWith('/vacancies/')) {
+    return apiClient.getVacancyDetails(adId);
+  }
+
+  if (pathname.startsWith('/equipment/')) {
+    return apiClient.getEquipmentDetails(adId);
+  }
+
+  if (pathname.startsWith('/materials/')) {
+    return apiClient.getMaterialDetails(adId);
+  }
+
+  if (pathname.startsWith('/tools/')) {
+    return apiClient.getToolDetails(adId);
+  }
+
+  return apiClient.getAdDetails(adId);
 }
 
 function getContactHref(contact: PublicAdContact): string {

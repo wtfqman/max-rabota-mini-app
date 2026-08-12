@@ -1698,6 +1698,22 @@ const oldAdOpenFlow = await runAdRevisionSubmitScenario({
 const oldAd = await oldAdOpenFlow.service.getPublicDetails('ad-revision');
 assert.equal(oldAd.id, 'ad-revision', 'old ads continue to open through public details');
 
+let publicDetailWhere: unknown = null;
+const publicDetailRepository = new AdRepository({
+  ad: {
+    findFirst: async (query: { where: unknown }) => {
+      publicDetailWhere = query.where;
+      return { id: 'old-direct-ad' };
+    }
+  }
+} as never);
+await publicDetailRepository.findPublicById('old-direct-ad', 'resume');
+assert.equal(
+  (publicDetailWhere as { AND?: unknown } | null)?.AND,
+  undefined,
+  'direct public ad details do not apply feed freshness filters'
+);
+
 const approvedRepositorySnapshot = await runAdRevisionRepositoryApproveSnapshot();
 assert.equal(approvedRepositorySnapshot.adUpdate?.priceAmount, 9500, 'revision approve updates public ad price');
 assert.equal(
