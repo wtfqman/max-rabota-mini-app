@@ -211,7 +211,7 @@ export function AdDetailsPage() {
   const resumeContactAccess = ad.type === 'resume' ? ad.contactAccess : undefined;
   const shouldShowResumeContactAccess = Boolean(
     resumeContactAccess &&
-      (!resumeContactAccess.canViewContacts || Boolean(resumeContactAccess.maskedContact) || (ad.contacts.length === 0 && resumeContactAccess.verified))
+      (!resumeContactAccess.canViewContacts || (ad.contacts.length === 0 && resumeContactAccess.verified))
   );
 
   return (

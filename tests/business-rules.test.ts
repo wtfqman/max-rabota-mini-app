@@ -319,6 +319,14 @@ const paidResumeContactAccess = await paidResumeContactAccessService.getAccess('
 });
 assert.equal(paidResumeContactAccess.alreadyPurchased, true, 'successful resume contact unlock is remembered');
 assert.equal(paidResumeContactAccess.canViewContacts, true, 'successful resume contact unlock opens the phone number');
+const paidResumeContactDetail = paidResumeContactAccessService.enrichMaskedContacts(
+  {
+    contacts: [{ id: 'paid-contact-1', type: 'phone', label: 'РўРµР»РµС„РѕРЅ', value: '+79990000000', isPreferred: true }]
+  },
+  paidResumeContactAccess
+);
+assert.equal(paidResumeContactDetail.contacts[0]?.value, '+79990000000', 'paid resume contact detail keeps the full phone number');
+assert.equal(paidResumeContactDetail.contactAccess.maskedContact, null, 'paid resume contact detail does not keep a stale masked phone');
 let legacyUnlockWrite: { verifiedContactId?: string | null; consentId?: string | null } | null = null;
 const legacyResumeContactService = new ResumeContactPurchasesService(
   {

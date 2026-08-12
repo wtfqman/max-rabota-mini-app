@@ -331,7 +331,7 @@ export class ResumeContactPurchasesService {
         ...masked.contactAccess,
         contactStatus: access.contactStatus,
         verified: access.verified,
-        maskedContact: access.maskedContact ?? masked.contactAccess.maskedContact,
+        maskedContact: access.canViewContacts ? null : access.maskedContact ?? masked.contactAccess.maskedContact,
         canPurchaseContact: access.canPurchaseContact,
         purchasePrice: access.purchasePrice,
         accessMode: access.accessMode,
