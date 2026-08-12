@@ -1159,13 +1159,6 @@ export class AdPaymentService {
           });
         }
 
-        if (!unlock.verifiedContactId || !unlock.consentId || unlock.accessMode !== ContactAccessMode.MAX_VERIFIED_CONNECTION) {
-          throw new AppError('Resume connection payment has no verified contact snapshot', 409, {
-            code: 'RESUME_CONNECTION_CONTACT_SNAPSHOT_MISSING',
-            paymentId: payment.id
-          });
-        }
-
         if (
           unlock.resumeAd.type !== AdType.RESUME ||
           (unlock.resumeAd.status !== AdStatus.APPROVED && unlock.resumeAd.status !== AdStatus.PUBLISHED) ||
@@ -1180,36 +1173,51 @@ export class AdPaymentService {
           });
         }
 
-        const [verifiedContact, consent] = await Promise.all([
-          tx.verifiedContact.findUnique({
-            where: {
-              id: unlock.verifiedContactId
-            }
-          }),
-          tx.contactDisclosureConsent.findUnique({
-            where: {
-              id: unlock.consentId
-            }
-          })
-        ]);
-
         const now = new Date();
-        if (
-          !verifiedContact ||
-          verifiedContact.userId !== unlock.resumeAd.ownerId ||
-          verifiedContact.status !== ContactStatus.VERIFIED ||
-          verifiedContact.revokedAt ||
-          (verifiedContact.expiresAt && verifiedContact.expiresAt <= now) ||
-          !consent ||
-          consent.userId !== unlock.resumeAd.ownerId ||
-          consent.verifiedContactId !== verifiedContact.id ||
-          consent.revokedAt
-        ) {
-          throw new AppError('Verified resume contact is no longer available', 409, {
-            code: 'RESUME_CONNECTION_CONTACT_UNAVAILABLE',
-            paymentId: payment.id,
-            resumeAdId: unlock.resumeAdId
-          });
+        let verifiedContactForEntitlement: { id: string } | null = null;
+        let consentForEntitlement: { id: string } | null = null;
+
+        if (unlock.verifiedContactId || unlock.consentId) {
+          if (!unlock.verifiedContactId || !unlock.consentId || unlock.accessMode !== ContactAccessMode.MAX_VERIFIED_CONNECTION) {
+            throw new AppError('Resume connection payment has incomplete verified contact snapshot', 409, {
+              code: 'RESUME_CONNECTION_CONTACT_SNAPSHOT_INCOMPLETE',
+              paymentId: payment.id
+            });
+          }
+
+          const [verifiedContact, consent] = await Promise.all([
+            tx.verifiedContact.findUnique({
+              where: {
+                id: unlock.verifiedContactId
+              }
+            }),
+            tx.contactDisclosureConsent.findUnique({
+              where: {
+                id: unlock.consentId
+              }
+            })
+          ]);
+
+          if (
+            !verifiedContact ||
+            verifiedContact.userId !== unlock.resumeAd.ownerId ||
+            verifiedContact.status !== ContactStatus.VERIFIED ||
+            verifiedContact.revokedAt ||
+            (verifiedContact.expiresAt && verifiedContact.expiresAt <= now) ||
+            !consent ||
+            consent.userId !== unlock.resumeAd.ownerId ||
+            consent.verifiedContactId !== verifiedContact.id ||
+            consent.revokedAt
+          ) {
+            throw new AppError('Verified resume contact is no longer available', 409, {
+              code: 'RESUME_CONNECTION_CONTACT_UNAVAILABLE',
+              paymentId: payment.id,
+              resumeAdId: unlock.resumeAdId
+            });
+          }
+
+          verifiedContactForEntitlement = verifiedContact;
+          consentForEntitlement = consent;
         }
 
         await tx.resumeContactUnlock.updateMany({
@@ -1221,31 +1229,33 @@ export class AdPaymentService {
           },
           data: {
             status: PaymentStatus.SUCCEEDED,
-            unlockedAt: new Date()
+            unlockedAt: now
           }
         });
 
-        await tx.contactAccessEntitlement.upsert({
-          where: {
-            paymentId: current.id
-          },
-          update: {
-            status: ContactAccessStatus.ACTIVE,
-            grantedAt: now
-          },
-          create: {
-            buyerUserId: unlock.buyerUserId,
-            resumeAdId: unlock.resumeAdId,
-            authorUserId: unlock.resumeAd.ownerId,
-            verifiedContactId: verifiedContact.id,
-            consentId: consent.id,
-            paymentId: current.id,
-            legacyUnlockId: unlock.id,
-            accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION,
-            status: ContactAccessStatus.ACTIVE,
-            grantedAt: now
-          }
-        });
+        if (verifiedContactForEntitlement && consentForEntitlement) {
+          await tx.contactAccessEntitlement.upsert({
+            where: {
+              paymentId: current.id
+            },
+            update: {
+              status: ContactAccessStatus.ACTIVE,
+              grantedAt: now
+            },
+            create: {
+              buyerUserId: unlock.buyerUserId,
+              resumeAdId: unlock.resumeAdId,
+              authorUserId: unlock.resumeAd.ownerId,
+              verifiedContactId: verifiedContactForEntitlement.id,
+              consentId: consentForEntitlement.id,
+              paymentId: current.id,
+              legacyUnlockId: unlock.id,
+              accessMode: ContactAccessMode.MAX_VERIFIED_CONNECTION,
+              status: ContactAccessStatus.ACTIVE,
+              grantedAt: now
+            }
+          });
+        }
 
         resumeUnlock = unlock
           ? {

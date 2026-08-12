@@ -239,6 +239,16 @@ const voluntaryApplicationAccessService = new ResumeContactPurchasesService(
         title: 'Резюме отделочника'
       })
     },
+    jobApplication: {
+      findFirst: async ({ where }: { where: { vacancyAd?: { ownerId?: string } } }) =>
+        where.vacancyAd?.ownerId === 'employer-user'
+          ? {
+              contactSnapshotJson: JSON.stringify({
+                contacts: [{ type: 'phone', value: '+79990000000', isPreferred: true }]
+              })
+            }
+          : null
+    },
     resumeContactUnlock: {
       findUnique: async () => null
     }
@@ -259,8 +269,8 @@ assert.equal(
       role: 'user'
     })
   ).canViewContacts,
-  false,
-  'vacancy owner still needs to buy resume contact even after voluntary application'
+  true,
+  'vacancy owner sees resume contact after voluntary application'
 );
 assert.equal(
   (
@@ -1225,6 +1235,120 @@ await (promotionPaymentService as unknown as { markPaymentSucceeded(paymentRecor
 );
 assert.equal(promotionPaymentHarness.purchaseActivations, 1, 'duplicate webhook does not activate promotion twice');
 assert.equal(promotionAnalyticsEvents.length, 1, 'duplicate promotion webhook does not duplicate analytics');
+
+const legacyResumeAdForPayment = {
+  id: 'resume-legacy-webhook',
+  ownerId: 'resume-owner',
+  type: AdType.RESUME,
+  status: AdStatus.PUBLISHED,
+  title: 'Legacy resume',
+  metadataJson: null,
+  deletedAt: null as Date | null,
+  hiddenAt: null as Date | null,
+  archivedAt: null as Date | null,
+  owner: {
+    status: UserStatus.ACTIVE,
+    deletedAt: null as Date | null
+  }
+};
+const legacyContactPayment = {
+  id: 'legacy-contact-payment',
+  adId: legacyResumeAdForPayment.id,
+  yooKassaPaymentId: 'yk-legacy-contact',
+  status: PaymentStatus.PENDING,
+  amountValue: '20.00',
+  currency: 'RUB',
+  packagePublications: 0,
+  includesMediaHighlight: false,
+  purposeCode: 'RESUME_CONTACT_UNLOCK',
+  purposeComponentsJson: JSON.stringify(['RESUME_CONTACT_UNLOCK']),
+  appliedAt: null as Date | null,
+  paidAt: null as Date | null,
+  rawPayloadJson: null as string | null,
+  ad: legacyResumeAdForPayment
+};
+const legacyContactUnlock = {
+  id: 'legacy-contact-unlock',
+  buyerUserId: 'legacy-buyer',
+  resumeAdId: legacyResumeAdForPayment.id,
+  paymentId: legacyContactPayment.id,
+  status: PaymentStatus.PENDING,
+  unlockedAt: null as Date | null,
+  refundedAt: null as Date | null,
+  verifiedContactId: null as string | null,
+  consentId: null as string | null,
+  accessMode: 'MAX_VERIFIED_CONNECTION',
+  resumeAd: legacyResumeAdForPayment
+};
+let legacyEntitlementWrites = 0;
+let legacyPublicationBalanceWrites = 0;
+const legacyResumePaymentDb = {
+  $transaction: async (callback: (tx: unknown) => unknown) => callback(legacyResumePaymentDb),
+  adPayment: {
+    findUnique: async () => legacyContactPayment,
+    updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+      const canClaim = legacyContactPayment.appliedAt === null;
+      if (canClaim) {
+        Object.assign(legacyContactPayment, data);
+      }
+      return { count: canClaim ? 1 : 0 };
+    },
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(legacyContactPayment, data);
+      return legacyContactPayment;
+    }
+  },
+  resumeContactUnlock: {
+    findFirst: async () => legacyContactUnlock,
+    updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(legacyContactUnlock, data);
+      return { count: 1 };
+    }
+  },
+  contactAccessEntitlement: {
+    upsert: async () => {
+      legacyEntitlementWrites += 1;
+      return {};
+    }
+  },
+  userVacancyPublicationBalance: {
+    upsert: async () => {
+      legacyPublicationBalanceWrites += 1;
+      return {};
+    }
+  }
+};
+const legacyResumePaymentService = new AdPaymentService(
+  legacyResumePaymentDb as never,
+  {} as never,
+  {
+    enabled: true,
+    amountValue: '100.00',
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/my-ads',
+    testMode: true
+  },
+  {
+    notifyNewAd: async () => undefined
+  } as never
+);
+await (legacyResumePaymentService as unknown as { markPaymentSucceeded(paymentRecordId: string, payment: unknown): Promise<void> }).markPaymentSucceeded(
+  'legacy-contact-payment',
+  {
+    id: 'yk-legacy-contact',
+    status: 'succeeded',
+    paid: true,
+    amount: {
+      value: '20.00',
+      currency: 'RUB'
+    }
+  }
+);
+assert.equal(legacyContactUnlock.status, PaymentStatus.SUCCEEDED, 'legacy resume contact webhook marks unlock succeeded');
+assert.ok(legacyContactUnlock.unlockedAt, 'legacy resume contact webhook stores unlockedAt');
+assert.equal(legacyEntitlementWrites, 0, 'legacy resume contact unlock does not require verified entitlement write');
+assert.equal(legacyPublicationBalanceWrites, 0, 'resume contact unlock does not credit publication balance');
+
 const sortedPromotionAds = [
   { id: 'normal', promotionPinnedUntil: null, boostedAt: new Date('2026-01-01') },
   { id: 'pinned', promotionPinnedUntil: new Date('2026-08-02'), boostedAt: null },

@@ -1,11 +1,12 @@
-import { AdStatus, AdType, ContactAccessMode, PaymentStatus, UserRole, type Ad, type PrismaClient } from '@rabst24/db';
+import { AdStatus, AdType, ContactAccessMode, JobApplicationStatus, PaymentStatus, UserRole, type Ad, type PrismaClient } from '@rabst24/db';
 import { AppError, isValidPaymentConfirmationUrl } from '@rabst24/shared';
 import type { AdPaymentPayload } from '../payments/ad-payment.service.js';
+import type { AdPaymentService } from '../payments/ad-payment.service.js';
 import type { YooKassaClient } from '../payments/yookassa-client.js';
 import type { VerifiedContactsService } from '../verified-contacts/verified-contacts.service.js';
 
 export const RESUME_CONTACT_PRICE_RUB = '20.00';
-export const RESUME_CONNECTION_PURPOSE = 'RESUME_CONNECTION_ACCESS';
+export const RESUME_CONTACT_UNLOCK_PURPOSE = 'RESUME_CONTACT_UNLOCK';
 
 type ResumeContactPurchaseSource = {
   source: 'verified' | 'legacy';
@@ -24,7 +25,8 @@ export class ResumeContactPurchasesService {
       currency: string;
       returnUrl: string;
       testMode: boolean;
-    }
+    },
+    private readonly adPaymentService?: Pick<AdPaymentService, 'syncPaymentByYooKassaPaymentId'>
   ) {}
 
   async getAccess(resumeAdId: string, viewer?: { userId: string; role: string } | null): Promise<{
@@ -70,7 +72,21 @@ export class ResumeContactPurchasesService {
       };
     }
 
-    const unlock = await this.db.resumeContactUnlock.findUnique({
+    if (await this.canViewByApplicationContact(resumeAdId, resume.ownerId, viewer.userId)) {
+      return {
+        canViewContacts: true,
+        alreadyPurchased: false,
+        unlockStatus: null,
+        contactStatus: availability.contactStatus,
+        verified: availability.verified,
+        maskedContact: availability.maskedContact,
+        canPurchaseContact: false,
+        purchasePrice: availability.price,
+        accessMode: availability.accessMode
+      };
+    }
+
+    let unlock = await this.db.resumeContactUnlock.findUnique({
       where: {
         buyerUserId_resumeAdId: {
           buyerUserId: viewer.userId,
@@ -78,6 +94,8 @@ export class ResumeContactPurchasesService {
         }
       }
     });
+
+    unlock = await this.syncPendingUnlock(unlock);
 
     const succeeded = unlock?.status === PaymentStatus.SUCCEEDED && unlock.unlockedAt !== null && unlock.refundedAt === null;
 
@@ -155,8 +173,8 @@ export class ResumeContactPurchasesService {
         },
         description: `Открытие контакта резюме ${resume.title}`,
         metadata: {
-          purpose: RESUME_CONNECTION_PURPOSE,
-          purposeCode: RESUME_CONNECTION_PURPOSE,
+          purpose: RESUME_CONTACT_UNLOCK_PURPOSE,
+          purposeCode: RESUME_CONTACT_UNLOCK_PURPOSE,
           adId: resumeAdId,
           buyerUserId,
           authorUserId: resume.ownerId,
@@ -165,8 +183,8 @@ export class ResumeContactPurchasesService {
           consentId: contactSource.consentId ?? '',
           accessMode: contactSource.accessMode,
           contactSource: contactSource.source,
-          paymentPurpose: RESUME_CONNECTION_PURPOSE,
-          paymentPurposeComponents: RESUME_CONNECTION_PURPOSE
+          paymentPurpose: RESUME_CONTACT_UNLOCK_PURPOSE,
+          paymentPurposeComponents: RESUME_CONTACT_UNLOCK_PURPOSE
         },
         receipt: {
           customer: {
@@ -207,9 +225,9 @@ export class ResumeContactPurchasesService {
         currency: this.settings.currency,
         confirmationUrl: payment.confirmation?.confirmation_url?.trim() ?? null,
         rawPayloadJson: JSON.stringify(payment),
-        purpose: RESUME_CONNECTION_PURPOSE,
-        purposeCode: RESUME_CONNECTION_PURPOSE,
-        purposeComponentsJson: JSON.stringify([RESUME_CONNECTION_PURPOSE]),
+        purpose: RESUME_CONTACT_UNLOCK_PURPOSE,
+        purposeCode: RESUME_CONTACT_UNLOCK_PURPOSE,
+        purposeComponentsJson: JSON.stringify([RESUME_CONTACT_UNLOCK_PURPOSE]),
         packagePublications: 0,
         includesMediaHighlight: false
       },
@@ -222,9 +240,9 @@ export class ResumeContactPurchasesService {
         currency: this.settings.currency,
         confirmationUrl: payment.confirmation?.confirmation_url?.trim() ?? null,
         rawPayloadJson: JSON.stringify(payment),
-        purpose: RESUME_CONNECTION_PURPOSE,
-        purposeCode: RESUME_CONNECTION_PURPOSE,
-        purposeComponentsJson: JSON.stringify([RESUME_CONNECTION_PURPOSE]),
+        purpose: RESUME_CONTACT_UNLOCK_PURPOSE,
+        purposeCode: RESUME_CONTACT_UNLOCK_PURPOSE,
+        purposeComponentsJson: JSON.stringify([RESUME_CONTACT_UNLOCK_PURPOSE]),
         packagePublications: 0,
         includesMediaHighlight: false
       }
@@ -363,6 +381,87 @@ export class ResumeContactPurchasesService {
       viewer.role === UserRole.ADMIN.toLowerCase() ||
       viewer.role === UserRole.MODERATOR.toLowerCase()
     );
+  }
+
+  private async canViewByApplicationContact(resumeAdId: string, resumeOwnerId: string, viewerUserId: string): Promise<boolean> {
+    const dbWithApplications = this.db as PrismaClient & {
+      jobApplication?: PrismaClient['jobApplication'];
+    };
+
+    if (!dbWithApplications.jobApplication) {
+      return false;
+    }
+
+    const application = await dbWithApplications.jobApplication.findFirst({
+      where: {
+        resumeAdId,
+        applicantUserId: resumeOwnerId,
+        status: {
+          not: JobApplicationStatus.WITHDRAWN
+        },
+        vacancyAd: {
+          ownerId: viewerUserId
+        }
+      },
+      select: {
+        contactSnapshotJson: true
+      }
+    });
+
+    return Boolean(application?.contactSnapshotJson && this.contactSnapshotHasContacts(application.contactSnapshotJson));
+  }
+
+  private contactSnapshotHasContacts(value: string): boolean {
+    try {
+      const parsed = JSON.parse(value) as { contacts?: Array<{ value?: unknown }> };
+
+      return Array.isArray(parsed.contacts) && parsed.contacts.some((contact) => typeof contact.value === 'string' && contact.value.trim());
+    } catch {
+      return false;
+    }
+  }
+
+  private async syncPendingUnlock<
+    TUnlock extends {
+      buyerUserId: string;
+      resumeAdId: string;
+      paymentId: string | null;
+      status: PaymentStatus;
+    } | null
+  >(unlock: TUnlock): Promise<TUnlock> {
+    if (!unlock?.paymentId || unlock.status !== PaymentStatus.PENDING || !this.adPaymentService) {
+      return unlock;
+    }
+
+    const payment = await this.db.adPayment.findUnique({
+      where: {
+        id: unlock.paymentId
+      },
+      select: {
+        yooKassaPaymentId: true
+      }
+    });
+
+    if (!payment) {
+      return unlock;
+    }
+
+    try {
+      await this.adPaymentService.syncPaymentByYooKassaPaymentId(payment.yooKassaPaymentId);
+    } catch {
+      return unlock;
+    }
+
+    const refreshed = await this.db.resumeContactUnlock.findUnique({
+      where: {
+        buyerUserId_resumeAdId: {
+          buyerUserId: unlock.buyerUserId,
+          resumeAdId: unlock.resumeAdId
+        }
+      }
+    });
+
+    return (refreshed ?? unlock) as TUnlock;
   }
 
   private async getAvailability(resumeAdId: string) {

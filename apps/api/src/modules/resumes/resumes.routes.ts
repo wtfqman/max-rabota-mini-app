@@ -25,7 +25,7 @@ export function createResumesRouter(container: ApiContainer): Router {
     currency: 'RUB',
     returnUrl: config.yookassa.returnUrl,
     testMode: config.yookassa.testMode
-  });
+  }, container.adPaymentService);
   const controller = new ResumesController(service, contactPurchasesService);
 
   router.get('/status', controller.status);

@@ -34,7 +34,7 @@ export function createAdsRouter(container: ApiContainer): Router {
     currency: 'RUB',
     returnUrl: config.yookassa.returnUrl,
     testMode: config.yookassa.testMode
-  });
+  }, container.adPaymentService);
   const controller = new AdsController(
     service,
     contactPurchasesService,

@@ -20,3 +20,22 @@ export function requireFeature(
     next();
   };
 }
+
+export function requireAnyFeature(
+  features: FeatureFlagKey[],
+  flags: FeatureFlags = config.features
+): RequestHandler {
+  return (_request, _response, next) => {
+    if (!features.some((feature) => flags[feature])) {
+      next(
+        new AppError('Feature is disabled', 404, {
+          code: 'FEATURE_DISABLED',
+          features
+        })
+      );
+      return;
+    }
+
+    next();
+  };
+}

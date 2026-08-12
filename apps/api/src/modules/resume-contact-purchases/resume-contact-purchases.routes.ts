@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { config } from '@rabst24/config';
 import { optionalAuth, requireAuth } from '../../middlewares/auth.middleware.js';
 import type { ApiContainer } from '../../app/container.js';
-import { requireFeature } from '../../shared/feature-flags/feature-guard.js';
+import { requireAnyFeature } from '../../shared/feature-flags/feature-guard.js';
 import { adIdParamSchema } from '../../shared/http/params.schemas.js';
 import { validateRequest } from '../../shared/http/validate-request.js';
 import { ResumeContactPurchasesController } from './resume-contact-purchases.controller.js';
@@ -15,12 +15,12 @@ export function createResumeContactPurchasesRouter(container: ApiContainer): Rou
     currency: 'RUB',
     returnUrl: config.yookassa.returnUrl,
     testMode: config.yookassa.testMode
-  });
+  }, container.adPaymentService);
   const controller = new ResumeContactPurchasesController(service);
 
   router.get(
     '/:adId',
-    requireFeature('RESUME_CONNECTION_PURCHASE_ENABLED'),
+    requireAnyFeature(['RESUME_CONTACT_PURCHASE_ENABLED', 'RESUME_CONNECTION_PURCHASE_ENABLED']),
     optionalAuth,
     validateRequest({ params: adIdParamSchema }),
     (request, _response, next) => {
@@ -31,7 +31,7 @@ export function createResumeContactPurchasesRouter(container: ApiContainer): Rou
   );
   router.post(
     '/:adId',
-    requireFeature('RESUME_CONNECTION_PURCHASE_ENABLED'),
+    requireAnyFeature(['RESUME_CONTACT_PURCHASE_ENABLED', 'RESUME_CONNECTION_PURCHASE_ENABLED']),
     requireAuth,
     validateRequest({ params: adIdParamSchema }),
     (request, _response, next) => {
