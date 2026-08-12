@@ -9,7 +9,6 @@ import {
   PaymentStatus,
   PromotionProductType,
   SavedSearchFrequency,
-  JobApplicationStatus,
   ProfileType,
   UserRole,
   UserStatus,
@@ -240,15 +239,6 @@ const voluntaryApplicationAccessService = new ResumeContactPurchasesService(
         title: 'Резюме отделочника'
       })
     },
-    jobApplication: {
-      findFirst: async (query: { where: { resumeAdId?: string; applicantUserId?: string; vacancyAd?: { ownerId?: string }; status?: { not?: JobApplicationStatus } } }) =>
-        query.where.resumeAdId === 'resume-application-access' &&
-        query.where.applicantUserId === 'applicant-user' &&
-        query.where.vacancyAd?.ownerId === 'employer-user' &&
-        query.where.status?.not === JobApplicationStatus.WITHDRAWN
-          ? { id: 'application-1' }
-          : null
-    },
     resumeContactUnlock: {
       findUnique: async () => null
     }
@@ -269,8 +259,8 @@ assert.equal(
       role: 'user'
     })
   ).canViewContacts,
-  true,
-  'vacancy owner sees resume contact after voluntary application with that resume'
+  false,
+  'vacancy owner still needs to buy resume contact even after voluntary application'
 );
 assert.equal(
   (

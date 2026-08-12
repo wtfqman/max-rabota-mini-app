@@ -1,4 +1,4 @@
-import { AdStatus, AdType, ContactAccessMode, JobApplicationStatus, PaymentStatus, UserRole, type Ad, type PrismaClient } from '@rabst24/db';
+import { AdStatus, AdType, ContactAccessMode, PaymentStatus, UserRole, type Ad, type PrismaClient } from '@rabst24/db';
 import { AppError, isValidPaymentConfirmationUrl } from '@rabst24/shared';
 import type { AdPaymentPayload } from '../payments/ad-payment.service.js';
 import type { YooKassaClient } from '../payments/yookassa-client.js';
@@ -61,22 +61,6 @@ export class ResumeContactPurchasesService {
         canViewContacts: false,
         alreadyPurchased: false,
         unlockStatus: null,
-        contactStatus: availability.contactStatus,
-        verified: availability.verified,
-        maskedContact: availability.maskedContact,
-        canPurchaseContact: availability.canPurchaseContact,
-        purchasePrice: availability.price,
-        accessMode: availability.accessMode
-      };
-    }
-
-    const canViewByApplication = await this.hasVoluntaryApplicationAccess(viewer.userId, resumeAdId, resume.ownerId);
-
-    if (canViewByApplication) {
-      return {
-        canViewContacts: true,
-        alreadyPurchased: false,
-        unlockStatus: 'application',
         contactStatus: availability.contactStatus,
         verified: availability.verified,
         maskedContact: availability.maskedContact,
@@ -379,27 +363,6 @@ export class ResumeContactPurchasesService {
       viewer.role === UserRole.ADMIN.toLowerCase() ||
       viewer.role === UserRole.MODERATOR.toLowerCase()
     );
-  }
-
-  private async hasVoluntaryApplicationAccess(viewerUserId: string, resumeAdId: string, resumeOwnerId: string): Promise<boolean> {
-    const application = await this.db.jobApplication.findFirst({
-      where: {
-        applicantUserId: resumeOwnerId,
-        resumeAdId,
-        status: {
-          not: JobApplicationStatus.WITHDRAWN
-        },
-        vacancyAd: {
-          ownerId: viewerUserId,
-          deletedAt: null
-        }
-      },
-      select: {
-        id: true
-      }
-    });
-
-    return Boolean(application);
   }
 
   private async getAvailability(resumeAdId: string) {
