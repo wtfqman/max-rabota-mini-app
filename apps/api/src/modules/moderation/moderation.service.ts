@@ -1,5 +1,6 @@
 import { config, getResolvedMaxChannelChatId, logger } from '@rabst24/config';
 import { AdStatus, AdType } from '@rabst24/db';
+import { AppError } from '@rabst24/shared';
 import type {
   AdService as CoreAdService,
   ChannelPublishingService,
@@ -7,7 +8,7 @@ import type {
   ModerationService as CoreModerationService
 } from '@rabst24/core';
 import { FoundationService } from '../../shared/modules/module-status.js';
-import type { AdRevisionRepository } from '../ads/ad-revision.repository.js';
+import { parseRevisionData, type AdRevisionRepository, type AdRevisionRecord } from '../ads/ad-revision.repository.js';
 import type { NotificationService } from '../notifications/notifications.service.js';
 import type { AdPaymentService } from '../payments/ad-payment.service.js';
 import type { SavedSearchesService } from '../saved-searches/saved-searches.service.js';
@@ -38,7 +39,7 @@ export class ModerationModuleService extends FoundationService {
   }
 
   async getPreview(adId: string) {
-    return this.adService.getAdDetails(adId);
+    return this.adService.getModerationAdDetails(adId);
   }
 
   async getPendingRevision(adId: string) {
@@ -52,6 +53,8 @@ export class ModerationModuleService extends FoundationService {
       const revision = await this.adRevisionRepository.findLatestPendingModeration(adId);
 
       if (revision) {
+        const current = await this.adService.getAdDetails(adId);
+        this.assertRevisionCanBeApproved(current, revision);
         await this.adRevisionRepository.approvePending(adId, moderatorId);
         await this.channelPublishingService.removeAdPublications(adId);
         await this.removeTelegramPublications(adId);
@@ -239,6 +242,30 @@ export class ModerationModuleService extends FoundationService {
         }
       });
     }
+  }
+
+  private assertRevisionCanBeApproved(
+    current: Awaited<ReturnType<CoreAdService['getAdDetails']>>,
+    revision: AdRevisionRecord
+  ): void {
+    if (current.type !== AdType.RESUME) {
+      return;
+    }
+
+    const data = parseRevisionData(revision.dataJson);
+    const hasManualContact = (data.contacts ?? []).some((contact) => contact.value.trim().length >= 3);
+    const hasVerifiedContact = Boolean(current.resumeDetails?.verifiedContactId && current.resumeDetails.contactConsentId);
+    const hasOwnerMaxContact = Boolean(current.owner?.maxUsername?.trim());
+
+    if (hasManualContact || hasVerifiedContact || hasOwnerMaxContact) {
+      return;
+    }
+
+    throw new AppError('Resume contact is required before approval', 400, {
+      code: 'RESUME_CONTACT_REQUIRED',
+      adId: current.id,
+      revisionId: revision.id
+    });
   }
 
   private async enqueueSavedSearchScan(adId: string): Promise<void> {

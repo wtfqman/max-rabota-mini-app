@@ -49,6 +49,13 @@ export function serializeRevisionSnapshot(dataJson: string, mediaJson: string | 
       districtText: data.districtText,
       categoryText: data.categoryText,
       desiredPosition: data.desiredPosition ?? null,
+      contacts: (data.contacts ?? []).map((contact, index) => ({
+        id: `revision-contact-${index}`,
+        type: contact.type,
+        label: contact.label ?? null,
+        value: contact.value,
+        isPreferred: contact.isPreferred ?? index === 0
+      })),
       mediaChanged: data.mediaChanged,
       coverPhoto: coverPhoto
         ? {

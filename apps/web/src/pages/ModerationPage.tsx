@@ -362,7 +362,7 @@ export function ModerationPage() {
                 </div>
                 <ModerationAccountBlock owner={selected.owner} />
                 <ModerationPaymentBlock payment={selected.payment} />
-                <ModerationContactBlock contacts={selected.contacts} />
+                <ModerationContactBlock contacts={selectedPreview.contacts} />
                 {selectedPreview.description ? (
                   <p className="whitespace-pre-line text-base leading-7 text-text-secondary">{selectedPreview.description}</p>
                 ) : null}
@@ -668,6 +668,7 @@ function getModerationRevisionPreview(ad: ModerationAdDetail) {
       description: ad.description,
       locationShort: ad.locationShort,
       category: ad.category,
+      contacts: ad.contacts,
       coverPhoto: ad.coverPhoto
     };
   }
@@ -679,6 +680,7 @@ function getModerationRevisionPreview(ad: ModerationAdDetail) {
     description: snapshot.description,
     locationShort: snapshot.districtText ?? snapshot.city ?? ad.locationShort,
     category: snapshot.categoryText ?? ad.category,
+    contacts: snapshot.contacts?.length ? snapshot.contacts : ad.contacts,
     coverPhoto: snapshot.coverPhoto ?? ad.coverPhoto
   };
 }

@@ -8,6 +8,18 @@ import { serializeRevisionSummary } from '../ads/ad-revision.serializer.js';
 import type { ModerationQueueQuery } from './moderation.schemas.js';
 import type { ModerationModuleService } from './moderation.service.js';
 
+type ModerationSerializableAd = Parameters<typeof serializeAdDetail>[0] & {
+  owner?: {
+    maxUserId?: string | null;
+    maxUsername?: string | null;
+  } | null;
+  resumeDetails?: {
+    verifiedContact?: {
+      maskedValue: string;
+    } | null;
+  } | null;
+};
+
 export class ModerationController extends FoundationController {
   constructor(private readonly moderationService: ModerationModuleService) {
     super(moderationService);
@@ -136,7 +148,7 @@ export class ModerationController extends FoundationController {
     return request.auth.userId;
   }
 
-  private async serializeModerationAdDetail(ad: Parameters<typeof serializeAdDetail>[0]) {
+  private async serializeModerationAdDetail(ad: ModerationSerializableAd) {
     const revision = await this.moderationService.getPendingRevision(ad.id);
 
     return {
@@ -146,11 +158,54 @@ export class ModerationController extends FoundationController {
   }
 }
 
-function serializeModerationAdDetail(ad: Parameters<typeof serializeAdDetail>[0]) {
+function serializeModerationAdDetail(ad: ModerationSerializableAd) {
+  const detail = serializeAdDetail(ad);
+
   return {
-    ...serializeAdDetail(ad),
+    ...detail,
+    contacts: getModerationContacts(detail.contacts, ad),
     payment: getLatestPaymentPayload(ad)
   };
+}
+
+function getModerationContacts(
+  contacts: ReturnType<typeof serializeAdDetail>['contacts'],
+  ad: ModerationSerializableAd
+): ReturnType<typeof serializeAdDetail>['contacts'] {
+  if (contacts.length > 0 || ad.type !== 'RESUME') {
+    return contacts;
+  }
+
+  const verifiedContact = ad.resumeDetails?.verifiedContact?.maskedValue?.trim();
+
+  if (!verifiedContact) {
+    const maxUsername = ad.owner?.maxUsername?.trim();
+    const maxContact = maxUsername ? (maxUsername.startsWith('@') ? maxUsername : `@${maxUsername}`) : null;
+
+    if (!maxContact) {
+      return contacts;
+    }
+
+    return [
+      {
+        id: `owner-max-${ad.id}`,
+        type: 'max',
+        label: 'MAX',
+        value: maxContact,
+        isPreferred: true
+      }
+    ];
+  }
+
+  return [
+    {
+      id: `verified-contact-${ad.id}`,
+      type: 'phone',
+      label: 'Телефон',
+      value: verifiedContact,
+      isPreferred: true
+    }
+  ];
 }
 
 function getLatestPaymentPayload(ad: Parameters<typeof serializeAdDetail>[0]) {

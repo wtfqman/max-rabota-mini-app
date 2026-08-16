@@ -37,6 +37,7 @@ import {
   type CreateAdDto
 } from '@rabst24/shared';
 import { AdPaymentService } from '../apps/api/src/modules/payments/ad-payment.service.js';
+import { normalizeYooKassaIdempotenceKey } from '../apps/api/src/modules/payments/yookassa-client.js';
 import { PaymentHistoryService } from '../apps/api/src/modules/payments/payment-history.service.js';
 import { AdsService } from '../apps/api/src/modules/ads/ads.service.js';
 import { AdRevisionRepository, parseRevisionData, type AdRevisionRecord } from '../apps/api/src/modules/ads/ad-revision.repository.js';
@@ -78,6 +79,24 @@ import { serializePublicProfile } from '../apps/api/src/modules/users/users.cont
 for (const type of AD_TYPES) {
   assert.equal(requiresAdPayment(type), type === 'vacancy', `${type} payment rule`);
 }
+
+const shortYooKassaIdempotenceKey = 'promotion:short-key';
+const longYooKassaIdempotenceKey = `promotion:${'x'.repeat(120)}`;
+assert.equal(
+  normalizeYooKassaIdempotenceKey(shortYooKassaIdempotenceKey),
+  shortYooKassaIdempotenceKey,
+  'short YooKassa idempotence keys are sent unchanged'
+);
+assert.equal(
+  normalizeYooKassaIdempotenceKey(longYooKassaIdempotenceKey).length,
+  64,
+  'long YooKassa idempotence keys are hashed to the API-safe length'
+);
+assert.equal(
+  normalizeYooKassaIdempotenceKey(longYooKassaIdempotenceKey),
+  normalizeYooKassaIdempotenceKey(longYooKassaIdempotenceKey),
+  'long YooKassa idempotence key normalization is deterministic'
+);
 
 assert.equal(requiresAdPayment('VACANCY'), true, 'Prisma enum vacancy is paid');
 assert.equal(requiresAdPayment('RESUME'), false, 'Prisma enum resume is free');
@@ -912,6 +931,129 @@ assert.equal(
   'moderation notification creates a normal notification MAX outbox job'
 );
 
+let pendingVacancyModerationNotifyCalls = 0;
+const pendingVacancyModerationNotifier = new ModerationNotificationService({
+  user: {
+    findMany: async () => [{ id: 'moderator-user', role: UserRole.MODERATOR }]
+  },
+  ad: {
+    findUnique: async () => ({
+      id: 'pending-vacancy-moderation-ad',
+      ownerId: 'owner',
+      type: AdType.VACANCY,
+      status: AdStatus.PENDING_MODERATION,
+      title: 'Pending vacancy',
+      description: null,
+      city: 'Moscow',
+      districtText: null,
+      categoryText: null,
+      locationLat: null,
+      locationLon: null,
+      priceAmount: null,
+      currency: 'RUB',
+      metadataJson: null,
+      isTest: false,
+      moderatedAt: null,
+      publishedAt: null,
+      hiddenAt: null,
+      archivedAt: null,
+      expiresAt: null,
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      contacts: [],
+      payments: [],
+      vacancyPublicationUsages: []
+    })
+  }
+} as never);
+pendingVacancyModerationNotifier.setNotificationService({
+  buildModerationLink: notificationService.buildModerationLink.bind(notificationService),
+  notify: async () => {
+    pendingVacancyModerationNotifyCalls += 1;
+    return { id: 'pending-vacancy-moderation-notification' };
+  }
+} as never);
+await pendingVacancyModerationNotifier.notifyNewAd(
+  {
+    id: 'pending-vacancy-moderation-ad',
+    ownerId: 'owner',
+    type: AdType.VACANCY,
+    status: AdStatus.PENDING_MODERATION,
+    title: 'Pending vacancy',
+    description: null,
+    city: 'Moscow',
+    districtText: null,
+    categoryText: null,
+    locationLat: null,
+    locationLon: null,
+    priceAmount: null,
+    currency: 'RUB',
+    metadataJson: null,
+    isTest: false,
+    moderatedAt: null,
+    publishedAt: null,
+    hiddenAt: null,
+    archivedAt: null,
+    expiresAt: null,
+    deletedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  } as never,
+  'owner'
+);
+assert.equal(pendingVacancyModerationNotifyCalls, 1, 'pending vacancy is announced to moderation recipients');
+
+let transientModerationNotifyCalls = 0;
+const transientModerationNotifier = new ModerationNotificationService(notificationHarness.db as never);
+transientModerationNotifier.setNotificationService({
+  buildModerationLink: notificationService.buildModerationLink.bind(notificationService),
+  notify: async () => {
+    transientModerationNotifyCalls += 1;
+
+    if (transientModerationNotifyCalls === 1) {
+      const error = new Error('Socket timeout (the database failed to respond to a query within the configured timeout).') as Error & {
+        code?: string;
+      };
+      error.code = 'P1008';
+      throw error;
+    }
+
+    return {
+      id: 'transient-moderation-notification'
+    };
+  }
+} as never);
+await transientModerationNotifier.notifyNewAd(
+  {
+    id: 'moderation-ad',
+    ownerId: 'owner',
+    type: AdType.VACANCY,
+    status: AdStatus.PENDING_MODERATION,
+    title: 'РџР»РѕС‚РЅРёРє',
+    description: null,
+    city: 'РњРѕСЃРєРІР°',
+    districtText: 'Р¦РђРћ',
+    categoryText: null,
+    locationLat: null,
+    locationLon: null,
+    priceAmount: null,
+    currency: 'RUB',
+    metadataJson: null,
+    isTest: false,
+    moderatedAt: null,
+    publishedAt: null,
+    hiddenAt: null,
+    archivedAt: null,
+    expiresAt: null,
+    deletedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  } as never,
+  'owner'
+);
+assert.equal(transientModerationNotifyCalls, 2, 'moderation notification retries transient SQLite timeout');
+
 const savedSearchHarness = createMemorySavedSearchHarness();
 const savedSearchService = new SavedSearchesService(
   savedSearchHarness.db,
@@ -1066,7 +1208,10 @@ const promotionService = new PromotionsService(
     enabled: true,
     currency: 'RUB',
     returnUrl: 'https://app.rabst24.ru/my-ads',
-    testMode: true
+    testMode: true,
+    priceRub: '50.00',
+    bumpCount: 2,
+    secondBumpDelayHours: 24
   },
   promotionHarness.notificationService as never
 );
@@ -1079,9 +1224,9 @@ try {
   disabledPromotionError = error;
 }
 assert.equal((disabledPromotionError as { details?: { code?: string } } | null)?.details?.code, 'PROMOTION_PRODUCT_UNAVAILABLE', 'disabled promotion product is unavailable');
-await promotionService.updateAdminProduct(PromotionProductType.URGENT_BADGE, 'admin-user', {
+await promotionService.updateAdminProduct(PromotionProductType.BUMP_ONCE, 'admin-user', {
   enabled: true,
-  price: '150.00',
+  price: '1.00',
   durationHours: 72,
   applicableAdTypes: ['vacancy'],
   channelBehavior: {
@@ -1089,9 +1234,9 @@ await promotionService.updateAdminProduct(PromotionProductType.URGENT_BADGE, 'ad
   }
 });
 const promotionPurchaseResult = await promotionService.createPurchase('promo-owner', 'promo-ad', {
-  productType: PromotionProductType.URGENT_BADGE
+  productType: PromotionProductType.BUMP_ONCE
 });
-assert.equal(promotionHarness.createdPayments[0].payload.amount.value, '150.00', 'promotion uses server-side product price');
+assert.equal(promotionHarness.createdPayments[0].payload.amount.value, '50.00', 'promotion uses server-side product price');
 assert.equal(promotionHarness.createdPayments[0].payload.metadata.purpose, 'AD_PROMOTION', 'promotion payment metadata uses AD_PROMOTION purpose');
 assert.equal(promotionPurchaseResult.purchase.status, 'pending', 'pending promotion payment does not activate promotion');
 assert.equal(promotionHarness.ads[0].promotionUrgentUntil, null, 'pending payment leaves promotion inactive');
@@ -1099,7 +1244,7 @@ assert.equal(promotionHarness.balance.remaining, 7, 'promotion purchase does not
 let foreignPromotionError: unknown = null;
 try {
   await promotionService.createPurchase('other-user', 'promo-ad', {
-    productType: PromotionProductType.URGENT_BADGE
+    productType: PromotionProductType.BUMP_ONCE
   });
 } catch (error) {
   foreignPromotionError = error;
@@ -1109,7 +1254,7 @@ promotionHarness.ads[0].deletedAt = new Date();
 let deletedPromotionError: unknown = null;
 try {
   await promotionService.createPurchase('promo-owner', 'promo-ad', {
-    productType: PromotionProductType.URGENT_BADGE
+    productType: PromotionProductType.BUMP_ONCE
   });
 } catch (error) {
   deletedPromotionError = error;
@@ -1143,10 +1288,10 @@ try {
       id: 'yk-promo',
       status: 'succeeded',
       paid: true,
-      amount: {
-        value: '150.00',
-        currency: 'RUB'
-      }
+        amount: {
+          value: '50.00',
+          currency: 'RUB'
+        }
     }
   );
 } catch (error) {
@@ -1207,19 +1352,27 @@ await (promotionPaymentService as unknown as { markPaymentSucceeded(paymentRecor
     id: 'yk-promo',
     status: 'succeeded',
     paid: true,
-    amount: {
-      value: '150.00',
-      currency: 'RUB'
-    }
+      amount: {
+        value: '50.00',
+        currency: 'RUB'
+      }
   }
 );
 assert.equal(promotionPaymentHarness.purchase.status, PaymentStatus.SUCCEEDED, 'succeeded promotion payment activates purchase');
-assert.ok(promotionPaymentHarness.ad.promotionUrgentUntil, 'succeeded promotion payment updates ad effect');
+assert.equal(promotionPaymentHarness.purchase.usedBumps, 1, 'succeeded promotion payment uses first bump');
+assert.ok(promotionPaymentHarness.purchase.firstBumpAt, 'succeeded promotion payment records first bump');
+assert.ok(promotionPaymentHarness.purchase.nextBumpAt, 'succeeded promotion payment schedules second bump');
+assert.ok(promotionPaymentHarness.ad.boostedAt, 'succeeded promotion payment updates boostedAt');
+assert.ok(promotionPaymentHarness.ad.sortAt, 'succeeded promotion payment updates feed sortAt');
+assert.equal(promotionPaymentHarness.outboxJobs.length, 1, 'succeeded promotion payment schedules one second bump job');
 assert.equal(promotionPaymentHarness.notifications.length, 2, 'payment and promotion notifications are created');
 assert.deepEqual(
   promotionAnalyticsEvents,
-  [{ adId: 'promo-ad', eventType: 'promotion_purchased' }],
-  'succeeded promotion payment writes analytics once'
+  [
+    { adId: 'promo-ad', eventType: 'promotion_purchased' },
+    { adId: 'promo-ad', eventType: 'promotion_first_bump_executed' }
+  ],
+  'succeeded promotion payment writes purchase and first bump analytics once'
 );
 await (promotionPaymentService as unknown as { markPaymentSucceeded(paymentRecordId: string, payment: unknown): Promise<void> }).markPaymentSucceeded(
   'payment-promo',
@@ -1228,13 +1381,193 @@ await (promotionPaymentService as unknown as { markPaymentSucceeded(paymentRecor
     status: 'succeeded',
     paid: true,
     amount: {
-      value: '150.00',
+      value: '50.00',
       currency: 'RUB'
     }
   }
 );
 assert.equal(promotionPaymentHarness.purchaseActivations, 1, 'duplicate webhook does not activate promotion twice');
-assert.equal(promotionAnalyticsEvents.length, 1, 'duplicate promotion webhook does not duplicate analytics');
+assert.equal(promotionPaymentHarness.outboxJobs.length, 1, 'duplicate webhook does not schedule another second bump');
+assert.equal(promotionAnalyticsEvents.length, 2, 'duplicate promotion webhook does not duplicate analytics');
+
+const secondBumpHarness = createMemoryPromotionSecondBumpHarness();
+const secondBumpEvents: Array<{ adId: string; eventType: string }> = [];
+const secondBumpService = new PromotionsService(
+  secondBumpHarness.db as never,
+  {} as never,
+  {
+    enabled: true,
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/my-ads',
+    testMode: true,
+    priceRub: '50.00',
+    bumpCount: 2,
+    secondBumpDelayHours: 24
+  },
+  undefined,
+  {
+    recordSystemEvent: async (adId: string, eventType: string) => {
+      secondBumpEvents.push({ adId, eventType });
+    }
+  } as never
+);
+const earlySecondBump = await secondBumpService.handleSecondBumpJob(
+  { promotionId: 'promotion-purchase', adId: 'promo-ad', bumpNumber: 2 },
+  new Date('2026-08-02T11:59:59.000Z')
+);
+assert.equal(earlySecondBump.reason, 'not_due', 'second bump does not run before configured time');
+assert.equal(secondBumpHarness.purchase.usedBumps, 1, 'early second bump keeps one used bump');
+const dueSecondBump = await secondBumpService.handleSecondBumpJob(
+  { promotionId: 'promotion-purchase', adId: 'promo-ad', bumpNumber: 2 },
+  new Date('2026-08-02T12:00:00.000Z')
+);
+assert.equal(dueSecondBump.status, 'bumped', 'second bump runs when due');
+assert.equal(secondBumpHarness.purchase.usedBumps, 2, 'second bump increments used bumps once');
+assert.equal(secondBumpHarness.purchase.lifecycleStatus, 'COMPLETED', 'second bump completes promotion');
+assert.equal(secondBumpHarness.ad.sortAt?.toISOString(), '2026-08-02T12:00:00.000Z', 'second bump updates feed sort date');
+const duplicateSecondBump = await secondBumpService.handleSecondBumpJob(
+  { promotionId: 'promotion-purchase', adId: 'promo-ad', bumpNumber: 2 },
+  new Date('2026-08-02T12:05:00.000Z')
+);
+assert.equal(duplicateSecondBump.reason, 'already_completed', 'duplicate second bump is idempotent');
+assert.equal(secondBumpHarness.adUpdateCount, 1, 'duplicate second bump does not update ad again');
+assert.deepEqual(
+  secondBumpEvents,
+  [
+    { adId: 'promo-ad', eventType: 'promotion_second_bump_executed' },
+    { adId: 'promo-ad', eventType: 'promotion_completed' }
+  ],
+  'second bump analytics are written once'
+);
+
+const revisionRaceAd = {
+  id: 'revision-race-ad',
+  ownerId: 'revision-owner',
+  type: AdType.VACANCY,
+  status: AdStatus.PUBLISHED,
+  title: 'Paid revision vacancy',
+  metadataJson: null as string | null,
+  deletedAt: null as Date | null,
+  hiddenAt: null as Date | null,
+  archivedAt: null as Date | null
+};
+const revisionRacePayment = {
+  id: 'payment-revision-race',
+  adId: revisionRaceAd.id,
+  yooKassaPaymentId: 'yk-revision-race',
+  status: PaymentStatus.SUCCEEDED,
+  amountValue: '100.00',
+  currency: 'RUB',
+  packagePublications: 1,
+  includesMediaHighlight: false,
+  purposeCode: 'VACANCY_PACKAGE',
+  purposeComponentsJson: JSON.stringify(['VACANCY_PACKAGE']),
+  appliedAt: new Date('2026-08-13T06:28:00.000Z'),
+  paidAt: new Date('2026-08-13T06:28:00.000Z'),
+  rawPayloadJson: JSON.stringify({
+    metadata: {
+      revisionId: 'revision-race'
+    }
+  }),
+  ad: revisionRaceAd
+};
+const revisionRace = {
+  id: 'revision-race',
+  adId: revisionRaceAd.id,
+  version: 2,
+  status: 'AWAITING_PAYMENT',
+  dataJson: '{}',
+  mediaJson: null,
+  createdBy: revisionRaceAd.ownerId,
+  paymentId: null as string | null,
+  submittedAt: null as Date | null,
+  approvedAt: null as Date | null,
+  rejectedAt: null as Date | null,
+  rejectionReason: null as string | null,
+  cancelledAt: null as Date | null,
+  createdAt: new Date('2026-08-13T06:27:00.000Z'),
+  updatedAt: new Date('2026-08-13T06:27:00.000Z')
+};
+let revisionRaceModerationNotifications = 0;
+let revisionRaceTransactionAttempts = 0;
+const revisionRaceDb = {
+  $transaction: async (callback: (tx: unknown) => unknown) => {
+    revisionRaceTransactionAttempts += 1;
+
+    if (revisionRaceTransactionAttempts === 1) {
+      const error = new Error('Socket timeout (the database failed to respond to a query within the configured timeout).') as Error & {
+        code?: string;
+      };
+      error.code = 'P1008';
+      throw error;
+    }
+
+    return callback(revisionRaceDb);
+  },
+  adPayment: {
+    findUnique: async () => revisionRacePayment,
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(revisionRacePayment, data);
+      return revisionRacePayment;
+    }
+  },
+  adRevision: {
+    findFirst: async () => revisionRace,
+    updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(revisionRace, data);
+      return { count: 1 };
+    }
+  },
+  ad: {
+    findUnique: async () => ({
+      metadataJson: revisionRaceAd.metadataJson
+    }),
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(revisionRaceAd, data);
+      return revisionRaceAd;
+    }
+  }
+};
+const revisionRacePaymentService = new AdPaymentService(
+  revisionRaceDb as never,
+  {} as never,
+  {
+    enabled: true,
+    amountValue: '100.00',
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/my-ads',
+    testMode: true
+  },
+  {
+    notifyNewAd: async () => {
+      revisionRaceModerationNotifications += 1;
+    }
+  } as never
+);
+await (revisionRacePaymentService as unknown as { markPaymentSucceeded(paymentRecordId: string, payment: unknown): Promise<void> }).markPaymentSucceeded(
+  'payment-revision-race',
+  {
+    id: 'yk-revision-race',
+    status: 'succeeded',
+    paid: true,
+    amount: {
+      value: '100.00',
+      currency: 'RUB'
+    },
+    metadata: {
+      revisionId: 'revision-race'
+    }
+  }
+);
+assert.equal(revisionRace.status, 'PENDING_MODERATION', 'already-applied revision payment repairs revision moderation status');
+assert.equal(revisionRace.paymentId, 'payment-revision-race', 'revision repair links missing payment id');
+assert.equal(revisionRaceTransactionAttempts, 2, 'paid revision repair retries transient payment transaction timeout');
+assert.equal(
+  JSON.parse(revisionRaceAd.metadataJson ?? '{}').activeRevisionStatus,
+  'PENDING_MODERATION',
+  'revision repair restores moderation queue marker'
+);
+assert.equal(revisionRaceModerationNotifications, 1, 'revision repair notifies moderation bot once');
 
 const legacyResumeAdForPayment = {
   id: 'resume-legacy-webhook',
@@ -1350,14 +1683,14 @@ assert.equal(legacyEntitlementWrites, 0, 'legacy resume contact unlock does not 
 assert.equal(legacyPublicationBalanceWrites, 0, 'resume contact unlock does not credit publication balance');
 
 const sortedPromotionAds = [
-  { id: 'normal', promotionPinnedUntil: null, boostedAt: new Date('2026-01-01') },
-  { id: 'pinned', promotionPinnedUntil: new Date('2026-08-02'), boostedAt: null },
-  { id: 'boosted', promotionPinnedUntil: null, boostedAt: new Date('2026-08-01') }
+  { id: 'boosted-old', sortAt: new Date('2026-08-01T10:30:00.000Z') },
+  { id: 'new-after-bump', sortAt: new Date('2026-08-01T11:00:00.000Z') },
+  { id: 'older', sortAt: new Date('2026-08-01T10:00:00.000Z') }
 ].sort((left, right) =>
-  Number(Boolean(right.promotionPinnedUntil)) - Number(Boolean(left.promotionPinnedUntil)) ||
-  ((right.boostedAt?.getTime() ?? 0) - (left.boostedAt?.getTime() ?? 0))
+  right.sortAt.getTime() - left.sortAt.getTime() ||
+  right.id.localeCompare(left.id)
 );
-assert.equal(sortedPromotionAds[0].id, 'pinned', 'promotion sorting keeps pinned first');
+assert.equal(sortedPromotionAds[0].id, 'new-after-bump', 'newer ad can outrank an earlier promotion bump');
 let republishUpdateData: { publishedAt?: unknown } | null = null;
 const republishRepository = new AdRepository({
   ad: {
@@ -1675,6 +2008,24 @@ assert.equal(repeatResumeWithoutDraftFlow.currentAd.status, AdStatus.PUBLISHED, 
 assert.equal(repeatResumeWithoutDraftFlow.revision.status, 'PENDING_MODERATION', 'free repeat resume snapshot enters moderation');
 assert.equal(repeatResumeWithoutDraftFlow.createdPayments.length, 0, 'free repeat resume snapshot does not create payment');
 
+let resumeRevisionMissingContactError: unknown = null;
+try {
+  await runAdRevisionSubmitScenario({
+    type: AdType.RESUME,
+    status: AdStatus.PUBLISHED,
+    balanceRemaining: 0,
+    mediaChanged: false,
+    revisionContacts: []
+  });
+} catch (error) {
+  resumeRevisionMissingContactError = error;
+}
+assert.equal(
+  (resumeRevisionMissingContactError as { details?: { code?: string } } | null)?.details?.code,
+  'RESUME_CONTACT_REQUIRED',
+  'resume revision without contacts is blocked before moderation'
+);
+
 const rejectedRevisionModeration = await runRevisionModerationScenario('reject');
 assert.equal(rejectedRevisionModeration.ad.title, 'Live published title', 'rejecting revision keeps old published ad content');
 assert.equal(rejectedRevisionModeration.revision.status, 'REJECTED', 'rejecting revision stores rejected status');
@@ -1915,6 +2266,40 @@ const backendSimpleResume = createResumeSchema.parse(simpleResumePayload);
 assert.equal(Object.prototype.hasOwnProperty.call(backendSimpleResume, 'skills'), false, 'simple resume strips skills');
 assert.equal(Object.prototype.hasOwnProperty.call(backendSimpleResume, 'education'), false, 'simple resume strips education');
 assert.equal(Object.prototype.hasOwnProperty.call(backendSimpleResume, 'experienceText'), false, 'simple resume strips extended experience');
+assert.equal(
+  createResumePayloadSchema.safeParse({
+    name: 'Иван',
+    profession: 'Каменщик',
+    description: 'Ищу работу',
+    contacts: [],
+    photos: []
+  }).success,
+  false,
+  'frontend resume payload rejects missing contact'
+);
+assert.equal(
+  createResumeSchema.safeParse({
+    name: 'Иван',
+    profession: 'Каменщик',
+    description: 'Ищу работу',
+    contacts: [],
+    photos: []
+  }).success,
+  false,
+  'backend resume payload rejects missing contact'
+);
+assert.equal(
+  createResumeSchema.safeParse({
+    name: 'Иван',
+    profession: 'Каменщик',
+    description: 'Ищу работу',
+    contacts: [],
+    verifiedContactId: 'verified-contact-1',
+    photos: []
+  }).success,
+  false,
+  'backend resume payload rejects incomplete verified contact pair'
+);
 
 const simpleEquipmentPayload = createEquipmentPayloadSchema.parse({
   title: 'Экскаватор',
@@ -2983,6 +3368,55 @@ await assert.rejects(
 );
 assert.equal(productionTestPaymentStatusUpdates, 0, 'production test payment webhook does not update local status');
 
+const paymentServiceAcceptingResumeContactMetadata = new AdPaymentService(
+  {} as ConstructorParameters<typeof AdPaymentService>[0],
+  {} as ConstructorParameters<typeof AdPaymentService>[1],
+  {
+    enabled: true,
+    amountValue: '100.00',
+    currency: 'RUB',
+    returnUrl: 'https://app.rabst24.ru/my-ads',
+    testMode: false
+  },
+  {} as ConstructorParameters<typeof AdPaymentService>[3]
+);
+assert.doesNotThrow(
+  () =>
+    (
+      paymentServiceAcceptingResumeContactMetadata as unknown as {
+        assertPaymentMatches(localPayment: unknown, remotePayment: unknown): void;
+      }
+    ).assertPaymentMatches(
+      {
+        id: 'local-resume-contact-payment',
+        adId: 'resume-contact-ad',
+        amountValue: '20.00',
+        currency: 'RUB',
+        packagePublications: 0,
+        includesMediaHighlight: false,
+        purposeCode: 'RESUME_CONTACT_UNLOCK',
+        purposeComponentsJson: JSON.stringify(['RESUME_CONTACT_UNLOCK'])
+      },
+      {
+        id: 'remote-resume-contact-payment',
+        status: 'succeeded',
+        paid: true,
+        amount: {
+          value: '20.00',
+          currency: 'RUB'
+        },
+        metadata: {
+          purpose: 'RESUME_CONTACT_UNLOCK',
+          purposeCode: 'RESUME_CONTACT_UNLOCK',
+          paymentPurpose: 'RESUME_CONTACT_UNLOCK',
+          adId: 'resume-contact-ad'
+        },
+        test: false
+      }
+    ),
+  'resume contact YooKassa metadata matches local resume contact payment purpose'
+);
+
 let latestRefundQuery: unknown = null;
 const paymentServiceWithPendingRefund = new AdPaymentService(
   {
@@ -3103,7 +3537,7 @@ function createPaymentGuardService(input: {
             ...input.billing
           }
         });
-  const usage = input.activeUsage
+  let usage = input.activeUsage
     ? {
         id: input.activeUsage.id ?? 'usage',
         createdAt: input.activeUsage.createdAt ?? new Date('2026-07-24T08:00:00.000Z'),
@@ -3150,8 +3584,24 @@ function createPaymentGuardService(input: {
             : null
       },
       vacancyPublicationUsage: {
-        findFirst: async () => usage,
-        create: async () => ({})
+        findFirst: async (query?: { where?: { createdAt?: { gt?: Date } } }) => {
+          const after = query?.where?.createdAt?.gt;
+
+          if (after && usage && usage.createdAt <= after) {
+            return null;
+          }
+
+          return usage;
+        },
+        create: async () => {
+          usage = {
+            id: 'fresh-backfilled-usage',
+            createdAt: new Date('2026-07-24T08:02:00.000Z'),
+            returnedAt: null
+          };
+
+          return {};
+        }
       },
       userVacancyPublicationBalance: {
         findUnique: async () => ({
@@ -3341,6 +3791,23 @@ await assert.rejects(
   'repeat publication requires a fresh consumed credit'
 );
 
+await createPaymentGuardService({
+  billing: {
+    source: 'payment',
+    planCode: 'single',
+    publications: 1,
+    mediaFeeRequired: false
+  },
+  succeededPayment: {
+    paidAt: new Date('2026-07-24T08:01:00.000Z')
+  },
+  activeUsage: {
+    id: 'old-paid-usage',
+    createdAt: new Date('2026-07-23T08:00:00.000Z')
+  },
+  lastPublicationAt: new Date('2026-07-24T08:00:00.000Z')
+}).assertAdHasFreshSucceededPaymentForPublication('guarded-vacancy');
+
 const fakePaidPayload = createVacancySchema.parse({
   ...vacancyPayloadWithMedia,
   photos: [],
@@ -3408,6 +3875,7 @@ async function runAdRevisionSubmitScenario(input: {
   balanceRemaining: number;
   mediaChanged: boolean;
   hasActiveRevision?: boolean;
+  revisionContacts?: CreateAdDto['contacts'];
 }) {
   let balanceRemaining = input.balanceRemaining;
   let consumedCredits = 0;
@@ -3416,7 +3884,8 @@ async function runAdRevisionSubmitScenario(input: {
   const currentAd = createRevisionScenarioAd(input.type, input.status);
   const revision = createRevisionRecord({
     status: 'DRAFT',
-    mediaChanged: input.mediaChanged
+    mediaChanged: input.mediaChanged,
+    contacts: input.revisionContacts
   });
 
   const revisionRepository = {
@@ -3768,6 +4237,7 @@ function createRevisionRecord(input: {
   status: AdRevisionRecord['status'];
   mediaChanged: boolean;
   title?: string;
+  contacts?: CreateAdDto['contacts'];
 }): AdRevisionRecord {
   return {
     id: 'revision-1',
@@ -3781,6 +4251,13 @@ function createRevisionRecord(input: {
       districtText: 'ЦАО',
       categoryText: 'Электрика',
       desiredPosition: 'Монтажник',
+      contacts: input.contacts ?? [
+        {
+          type: 'PHONE',
+          value: '+79990000000',
+          isPreferred: true
+        }
+      ],
       mediaChanged: input.mediaChanged
     }),
     mediaJson: input.mediaChanged
@@ -4087,7 +4564,9 @@ function createMemoryNotificationHarness() {
                 lastName: null,
                 displayName: 'Employer'
               },
-              contacts: []
+              contacts: [],
+              payments: [],
+              vacancyPublicationUsages: [{ returnedAt: null }]
             }
           : null
     },
@@ -4865,14 +5344,19 @@ function createMemoryPromotionPaymentHarness() {
     deletedAt: null as Date | null,
     hiddenAt: null as Date | null,
     archivedAt: null as Date | null,
-    promotionUrgentUntil: null as Date | null
+    boostedAt: null as Date | null,
+    sortAt: null as Date | null,
+    promotionUrgentUntil: null as Date | null,
+    promotionPinnedUntil: null as Date | null,
+    promotionHighlightedUntil: null as Date | null,
+    promotionRecommendedUntil: null as Date | null
   };
   const payment = {
     id: 'payment-promo',
     adId: ad.id,
     yooKassaPaymentId: 'yk-promo',
     status: PaymentStatus.PENDING,
-    amountValue: '150.00',
+    amountValue: '50.00',
     currency: 'RUB',
     packagePublications: 0,
     includesMediaHighlight: false,
@@ -4889,27 +5373,36 @@ function createMemoryPromotionPaymentHarness() {
     adId: string;
     productType: PromotionProductType;
     status: PaymentStatus;
+    lifecycleStatus: string;
+    totalBumps: number;
+    usedBumps: number;
     startsAt: Date | null;
     endsAt: Date | null;
+    firstBumpAt: Date | null;
+    secondBumpAt: Date | null;
+    nextBumpAt: Date | null;
     lastBumpedAt: Date | null;
-    product: {
-      durationHours: number;
-    };
+    completedAt: Date | null;
   } = {
     id: 'promotion-purchase',
     userId: 'promo-owner',
     adId: ad.id,
-    productType: PromotionProductType.URGENT_BADGE,
+    productType: PromotionProductType.BUMP_ONCE,
     status: PaymentStatus.PENDING,
+    lifecycleStatus: 'PENDING_PAYMENT',
+    totalBumps: 2,
+    usedBumps: 0,
     startsAt: null as Date | null,
     endsAt: null as Date | null,
+    firstBumpAt: null as Date | null,
+    secondBumpAt: null as Date | null,
+    nextBumpAt: null as Date | null,
     lastBumpedAt: null as Date | null,
-    product: {
-      durationHours: 72
-    }
+    completedAt: null as Date | null
   };
   let purchaseActivations = 0;
   const notifications: unknown[] = [];
+  const outboxJobs: Array<Record<string, unknown>> = [];
   const db = {
     $transaction: async (callback: (tx: unknown) => unknown) => callback(db),
     adPayment: {
@@ -4941,6 +5434,12 @@ function createMemoryPromotionPaymentHarness() {
         return { count: 1 };
       }
     },
+    outboxJob: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        outboxJobs.push(data);
+        return data;
+      }
+    },
     ad: {
       update: async ({ data }: { data: Record<string, unknown> }) => {
         Object.assign(ad, data);
@@ -4956,6 +5455,7 @@ function createMemoryPromotionPaymentHarness() {
     db,
     ad,
     purchase,
+    outboxJobs,
     notifications,
     get purchaseActivations() {
       return purchaseActivations;
@@ -4981,6 +5481,76 @@ function createMemoryPromotionPaymentHarness() {
         label: 'my ads',
         path: '/my-ads'
       })
+    }
+  };
+}
+
+function createMemoryPromotionSecondBumpHarness() {
+  const ad = {
+    id: 'promo-ad',
+    status: AdStatus.PUBLISHED,
+    deletedAt: null as Date | null,
+    hiddenAt: null as Date | null,
+    archivedAt: null as Date | null,
+    boostedAt: new Date('2026-08-01T12:00:00.000Z'),
+    sortAt: new Date('2026-08-01T12:00:00.000Z')
+  };
+  const purchase = {
+    id: 'promotion-purchase',
+    adId: ad.id,
+    lifecycleStatus: 'ACTIVE',
+    usedBumps: 1,
+    totalBumps: 2,
+    secondBumpAt: null as Date | null,
+    nextBumpAt: new Date('2026-08-02T12:00:00.000Z'),
+    lastBumpedAt: new Date('2026-08-01T12:00:00.000Z'),
+    completedAt: null as Date | null,
+    ad
+  };
+  let adUpdateCount = 0;
+  const db = {
+    $transaction: async (callback: (tx: unknown) => unknown) => callback(db),
+    promotionPurchase: {
+      findFirst: async ({ where }: { where: { id: string; adId: string } }) =>
+        purchase.id === where.id && purchase.adId === where.adId ? purchase : null,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(purchase, data);
+        return purchase;
+      },
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        if (
+          where.id !== purchase.id ||
+          where.lifecycleStatus !== purchase.lifecycleStatus ||
+          where.usedBumps !== purchase.usedBumps ||
+          purchase.secondBumpAt !== null
+        ) {
+          return { count: 0 };
+        }
+
+        if (typeof data.usedBumps === 'object' && data.usedBumps && 'increment' in data.usedBumps) {
+          purchase.usedBumps += Number((data.usedBumps as { increment: number }).increment);
+        }
+        const rest = { ...data };
+        delete rest.usedBumps;
+        Object.assign(purchase, rest);
+        return { count: 1 };
+      }
+    },
+    ad: {
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        adUpdateCount += 1;
+        Object.assign(ad, data);
+        return ad;
+      }
+    }
+  };
+
+  return {
+    db,
+    ad,
+    purchase,
+    get adUpdateCount() {
+      return adUpdateCount;
     }
   };
 }

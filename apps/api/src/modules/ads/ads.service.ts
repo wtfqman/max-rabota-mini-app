@@ -261,6 +261,8 @@ export class AdsService extends FoundationService {
       });
     }
 
+    this.assertRevisionHasRequiredContacts(current, revision);
+
     if (current.type !== AdType.VACANCY) {
       const submitted = await this.adRevisionRepository.markSubmitted(revision.id);
       void this.moderationNotificationService.notifyNewAd(current, ownerId);
@@ -381,6 +383,27 @@ export class AdsService extends FoundationService {
         adId,
         revisionId
       }
+    });
+  }
+
+  private assertRevisionHasRequiredContacts(current: AdWithDetailsRecord, revision: AdRevisionRecord): void {
+    if (current.type !== AdType.RESUME) {
+      return;
+    }
+
+    const data = parseRevisionData(revision.dataJson);
+    const hasManualContact = (data.contacts ?? []).some((contact) => contact.value.trim().length >= 3);
+    const hasVerifiedContact = Boolean(current.resumeDetails?.verifiedContactId && current.resumeDetails.contactConsentId);
+    const hasOwnerMaxContact = Boolean(current.owner?.maxUsername?.trim());
+
+    if (hasManualContact || hasVerifiedContact || hasOwnerMaxContact) {
+      return;
+    }
+
+    throw new AppError('Resume contact is required before moderation', 400, {
+      code: 'RESUME_CONTACT_REQUIRED',
+      adId: current.id,
+      revisionId: revision.id
     });
   }
 }
